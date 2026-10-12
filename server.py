@@ -59,11 +59,6 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
-    def do_GET(self):
-        if self.path == "/":
-            self.path = "/callback.html"
-        return SimpleHTTPRequestHandler.do_GET(self)
-
     def log_message(self, fmt, *args):
         sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
 

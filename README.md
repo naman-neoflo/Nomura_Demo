@@ -8,8 +8,9 @@ webhook, which places an outbound AI voice call via Vapi.
 
 | File | Purpose |
 | --- | --- |
-| `callback.html` | The form. Self-contained — no build step, no dependencies. |
-| `server.py` | Local dev server. Serves the page and proxies submissions to n8n. |
+| `index.html` | The form. Self-contained — no build step, no dependencies. |
+| `api/callback.js` | Vercel serverless function. Forwards submissions to n8n. |
+| `server.py` | Local dev server. Same forwarding, for development. |
 
 ## Running locally
 
@@ -25,6 +26,20 @@ reports only a generic "Failed to fetch".
 
 Opening `callback.html` straight from disk makes it post to n8n directly, which
 will keep failing on CORS until the webhook sends the right headers.
+
+## Deploying to Vercel
+
+Deploy the repo root as a static site; no build command and no framework preset
+are needed. Two things make it work:
+
+- The page must be `index.html`. Vercel serves that at `/` — a repo with only
+  `callback.html` returns `404 NOT_FOUND` on the root URL.
+- `api/callback.js` answers the form's POST and forwards it to n8n. Without it
+  the page loads but every submission 404s, since the browser cannot call the
+  webhook directly (see above).
+
+Optionally set a `WEBHOOK_URL` environment variable in the Vercel project to
+override the hardcoded endpoint.
 
 ## Submitted payload
 
