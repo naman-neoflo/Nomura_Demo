@@ -31,7 +31,7 @@ will keep failing on CORS until the webhook sends the right headers.
 ```json
 {
   "name": "Naman Sharma",
-  "contact_number": "+919876543210",
+  "contact_number": "+12125550147",
   "reason": "Password Reset",
   "submitted_at": "2026-10-13T02:16:00.000Z"
 }
@@ -39,6 +39,10 @@ will keep failing on CORS until the webhook sends the right headers.
 
 `reason` is one of: Password Reset, Software Installation, General IT Query,
 Account Unlock, VPN Not Connecting.
+
+`contact_number` is normalised to E.164 before sending: the page strips spaces,
+brackets and dashes, so `+1 (212) 555-0147` is submitted as `+12125550147`.
+Any country code is accepted — India, US and others — but it must be present.
 
 ## n8n configuration
 

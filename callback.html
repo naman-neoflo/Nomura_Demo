@@ -200,7 +200,7 @@
 
           <div class="field">
             <label for="contact">Contact number <span class="req">*</span>
-              <span class="hint">Include the country code, e.g. +91 98765 43210</span>
+              <span class="hint">Include the country code — e.g. +91 98765 43210 (India) or +1 212 555 0147 (US)</span>
             </label>
             <input id="contact" name="contact" type="tel" required autocomplete="tel" placeholder="+91 98765 43210">
           </div>
@@ -283,6 +283,17 @@
       return;
     }
 
+    // The dialler needs E.164 (+ then digits only), but people type numbers
+    // with spaces, brackets and dashes: "+1 (212) 555-0147", "+91 98765 43210".
+    // Strip the formatting and keep a single leading "+".
+    var dial = contact.replace(/[^\d+]/g, "").replace(/(?!^)\+/g, "");
+
+    if (!/^\+[1-9]\d{7,14}$/.test(dial)) {
+      setStatus("Please enter a valid number including the country code, "
+              + "e.g. +91 98765 43210 or +1 212 555 0147.", "err");
+      return;
+    }
+
     setBtn("Sending…", true);
     setStatus("Submitting your request…", "ok");
 
@@ -291,7 +302,7 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: name,
-        contact_number: contact,
+        contact_number: dial,
         reason: reason,
         submitted_at: new Date().toISOString()
       })
@@ -299,7 +310,7 @@
       .then(function (res) {
         if (!res.ok) throw new Error("Server responded with " + res.status);
         setStatus("Thank you, " + name + ". Your request has been logged — a service desk "
-                + "analyst will call you back on " + contact + ".", "ok");
+                + "analyst will call you back on " + dial + ".", "ok");
         form.reset();
       })
       .catch(function (err) {
