@@ -48,10 +48,23 @@ blocked before it is sent and surfaces only as "Failed to fetch".
 
 Ask it an IT question and it answers from the knowledge base.
 
-A greeting or a thank-you is answered conversationally without going near
-retrieval, so "thanks, that worked" is not met with an offer to raise a ticket.
-A message only counts as small talk when every word in it is a pleasantry, so
-"hi my outlook won't open" still goes through retrieval.
+**Not every message is a lookup.** Treating them all as one is what made the
+chat feel robotic, so the route reads the turn first:
+
+| Turn | Response |
+| --- | --- |
+| A greeting ("Hi", "Hii", "Heyy") | A short hello. Elongated spellings are normalised, so "Hiii" is a greeting, not a failed search. |
+| A thank-you or "that worked" | A warm close, no escalation offered. |
+| "It didn't work" / "still not working" | Not a new question — it is the end of the steps already given. Escalates on the article in play, quoting the knowledge base's own routing ("this needs the Messaging Team … a P2 ticket"). |
+| Anything else | Retrieval. |
+
+A turn only counts as small talk when every word in it is a pleasantry, so
+"hi my outlook won't open" still goes through retrieval. A short follow-up that
+retrieves nothing on its own is retried with the previous question attached
+before the chat gives up.
+
+The widget sends the active article with each message, which is what lets a
+three-word "no it didn't work" know which steps it refers to.
 
 **Retrieval** runs two retrievers and fuses them with reciprocal rank fusion:
 

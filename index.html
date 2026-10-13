@@ -565,13 +565,13 @@
     }
 
     up.addEventListener("click", function () {
-      settle(up, "Thanks for the feedback.");
+      settle(up, "Glad that helped.");
     });
 
     down.addEventListener("click", function () {
-      settle(down, "Sorry that didn't help.");
+      settle(down, "Sorry about that.");
       offerEscalation(
-        "Let's get this to someone who can look at it properly.",
+        "Let me get this to someone who can look at it properly.",
         article
       );
     });
@@ -632,7 +632,7 @@
   }
 
   function raiseTicket(box, article) {
-    var pending = note(box, "Raising a ticket…");
+    var pending = note(box, "Raising that now…");
 
     fetch("/api/ticket", {
       method: "POST",
@@ -653,7 +653,7 @@
         }
         if (r.status === 503) {
           // Be straight about it rather than inventing a reference number.
-          pending.textContent = "Ticketing isn't connected yet, so I can't raise one from here.";
+          pending.textContent = "I can't raise tickets from here just yet — that isn't connected.";
           var retry = document.createElement("button");
           retry.type = "button";
           retry.className = "primary";
@@ -708,7 +708,11 @@
     fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: text, history: history.slice(0, -1) })
+      body: JSON.stringify({
+        message: text,
+        history: history.slice(0, -1),
+        article: lastArticle
+      })
     })
       .then(function (res) {
         if (!res.ok) throw new Error("status " + res.status);
@@ -718,17 +722,19 @@
         typing.remove();
         var el = addMessage("bot", data.reply);
         history.push({ role: "assistant", content: data.reply });
-        lastArticle = data.article || null;
+        // Hold on to the last article we actually answered from, so a later
+        // "that didn't work" still knows which steps it refers to.
+        if (data.article) lastArticle = data.article;
 
         addFeedback(el, data.article);
         if (data.escalate) {
-          offerEscalation("How would you like to take this forward?", data.article);
+          offerEscalation("How would you like to take this forward?", data.article || lastArticle);
         }
       })
       .catch(function () {
         typing.remove();
-        var el = addMessage("bot", "Sorry, I couldn't reach the assistant just now. Please try again.");
-        offerEscalation("You can still get help another way.", lastArticle);
+        var el = addMessage("bot", "Sorry, I couldn't reach the assistant just then. Give it another go in a moment.");
+        offerEscalation("In the meantime, I can get you help another way.", lastArticle);
       })
       .finally(function () {
         setBusy(false);
@@ -742,9 +748,9 @@
     launcher.setAttribute("aria-expanded", "true");
     if (!log.childElementCount) {
       addMessage("bot",
-        "Hello, I'm the Nomura IT Assistant. Describe your issue — for example "
-        + "\"Outlook won't open\" or \"my VPN keeps dropping\" — and I'll walk you "
-        + "through the fix.");
+        "Hi, I'm the Nomura IT Assistant. Tell me what's going wrong — something "
+        + "like \"Outlook won't open\" or \"my VPN keeps dropping\" — and I'll talk "
+        + "you through it.");
     }
     input.focus();
   }

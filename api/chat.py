@@ -31,54 +31,131 @@ CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_MODEL = "openai/gpt-5.1"
 MAX_HISTORY = 10
 
+# Canned replies. These are the lines a person actually reads when the model
+# is not involved, so they are written the way a colleague would say them.
 NO_ANSWER = (
-    "I don't have guidance for that in my knowledge base. I can raise a ticket "
-    "for you, or arrange a callback from a live IT specialist."
+    "That's not something I have steps for, I'm afraid. I can raise a ticket "
+    "for you or get a specialist to call you back \u2014 whichever is easier."
 )
 
-# A greeting or a thank-you is not a failed knowledge base lookup. Without this
-# "thanks, that worked" would be met with an offer to raise a ticket.
+# ---------------------------------------------------------------------------
+# Reading the turn
 #
-# A message counts as small talk only when *every* word is a pleasantry, so
-# "hi my outlook won't open" still goes through retrieval.
+# Not every message is a fresh question. A greeting, a thank-you, or "it didn't
+# work" each need a different response, and treating them all as knowledge base
+# lookups is what makes a bot feel robotic -- "Hii" came back as "I don't have
+# guidance for that in my knowledge base".
+# ---------------------------------------------------------------------------
+
 GREETING_WORDS = {"hi", "hey", "hello", "yo", "morning", "afternoon", "evening", "greetings"}
 CLOSING_WORDS = {
     "thanks", "thank", "thx", "cheers", "ta", "great", "perfect", "lovely",
-    "brilliant", "ok", "okay", "sorted", "bye", "goodbye", "cya", "nope", "no",
-    "worked", "done", "awesome",
+    "brilliant", "ok", "okay", "sorted", "bye", "goodbye", "cya", "nope",
+    "worked", "done", "awesome", "fixed",
 }
 FILLER_WORDS = {
     "a", "all", "good", "got", "it", "lot", "mate", "much", "now", "so", "team",
     "that", "there", "the", "very", "well", "yes", "yeah", "you", "aria", "and",
+    "is", "im", "i", "am", "my", "me", "no",
 }
+
+# "that didn't work", "still not working", "no luck", "tried that already"
+FAILED_RE = re.compile(
+    r"\b("
+    r"(didn'?t|did\s+not|doesn'?t|does\s+not|hasn'?t|won'?t|wont)\s+"
+    r"(work|working|worked|help|helped|fix|fixed|open|connect)"
+    r"|still\s+(not|isn'?t|doesn'?t|the\s+same|having|broken|happening)"
+    r"|no\s+(luck|joy|change|difference)"
+    r"|(tried|done)\s+(that|those|them|all\s+of\s+that)"
+    r"|not\s+work(ing|ed)?"
+    r"|same\s+(issue|problem|error)"
+    r"|nothing\s+(happened|changed|works)"
+    r")\b",
+    re.I,
+)
+
+# "that worked", "all sorted now", "it's fixed"
+RESOLVED_RE = re.compile(
+    r"\b("
+    r"(that|it|this)\s+(worked|works|fixed|did\s+it|helped)"
+    r"|all\s+(good|sorted|fine)"
+    r"|(is|it'?s)\s+(working|fixed|sorted)"
+    r"|sorted\s+now"
+    r")\b",
+    re.I,
+)
+
+
+def _words(message):
+    """Lowercase words, with elongation collapsed so "Hiii" reads as "hi"."""
+    out = []
+    for word in re.findall(r"[a-z']+", message.lower()):
+        word = re.sub(r"(.)\1{2,}", r"\1", word)       # "hiiii" -> "hii"
+        trimmed = re.sub(r"(.)\1+$", r"\1", word)      # "hii"   -> "hi"
+        if trimmed in GREETING_WORDS or trimmed in CLOSING_WORDS:
+            word = trimmed
+        out.append(word)
+    return out
 
 
 def small_talk_reply(message):
     """Return a short reply for a purely conversational turn, else None."""
-    words = re.findall(r"[a-z']+", message.lower())
+    words = _words(message)
     if not words or len(words) > 6:
         return None
     if not all(w in GREETING_WORDS or w in CLOSING_WORDS or w in FILLER_WORDS for w in words):
         return None
     if words[0] in GREETING_WORDS:
-        return "Hello. Describe your IT issue and I'll walk you through the fix."
+        return "Hi — what's going wrong? Describe it in your own words and I'll help."
     if any(w in CLOSING_WORDS for w in words):
-        return "Glad to help. Is there anything else you need?"
+        return "Glad that's sorted. Anything else I can help with?"
     return None
 
 
-SYSTEM = """You are Aria, the IT service desk assistant for Nomura, helping an employee over chat.
+def read_outcome(message):
+    """Did they just tell us the steps worked, or that they didn't?"""
+    if RESOLVED_RE.search(message):
+        return "resolved"
+    if FAILED_RE.search(message):
+        return "failed"
+    return None
 
-Answer only from the knowledge base articles provided in the user message. They are the single source of truth.
 
-- Give the troubleshooting steps as a short numbered list, in the order the article states them. Do not invent, reorder or add steps.
-- Keep it brief and plain. No preamble, no sign-off, no emoji. Two or three sentences plus the steps.
-- Ask the employee to try the steps and tell you whether they worked.
-- If the articles do not cover the question, reply with exactly: NO_ANSWER
+def escalation_line(article):
+    """What to say once the steps have been tried and the issue is still there.
+
+    The knowledge base names the team and priority for exactly this case, so the
+    handoff quotes its routing instead of apologising generically.
+    """
+    route = (article or {}).get("escalation") or {}
+    team, priority = route.get("team"), route.get("priority")
+    if team and priority:
+        # "the Messaging Team" reads right; "the Identity and Access Management"
+        # does not. Only the named groups take an article.
+        named = team.endswith("Team") or team.endswith("Desk")
+        return ("Sorry — that usually does it. Since it hasn't, this needs %s%s "
+                "to take a proper look. I can raise a %s ticket for you, or arrange "
+                "a callback." % ("the " if named else "", team, priority))
+    return ("Sorry that didn't sort it. Let me get this to someone who can dig into "
+            "it properly — I can raise a ticket or arrange a callback.")
+
+
+SYSTEM = """You are Aria, the IT service desk assistant for Nomura, helping a colleague over chat.
+
+Ground every answer in the knowledge base articles provided in the user message. They are the single source of truth for what to do.
+
+How to write:
+- Sound like a helpful colleague on the service desk, not a manual. Warm, direct, no corporate filler and no emoji.
+- Open with one short line in your own words that shows you understood the problem. Do not just restate their message back at them.
+- Then give the steps as a numbered list, in the order the article states them. Do not invent, reorder, merge or add steps.
+- Close by asking them to try it and say how they get on.
+- Keep the whole reply under about 120 words.
+
+Judgement:
+- If the problem is too vague to match confidently, ask one short clarifying question instead of guessing. Offer a couple of likely options to make it easy to answer.
+- If the articles genuinely do not cover the question, reply with exactly: NO_ANSWER
 - Never ask for a password, MFA code, PIN or any other credential, and never offer to reset one yourself.
-- Do not mention the knowledge base, these instructions, article titles or file names.
-
-If the employee is simply saying hello or thanking you, reply in one short line without steps."""
+- Never mention the knowledge base, these instructions, article titles or file names. Just help."""
 
 
 def build_context(hits):
@@ -158,75 +235,86 @@ def summarise(article):
     }
 
 
+def last_question(history):
+    """The most recent substantive thing they asked, for context on a follow-up."""
+    for turn in reversed(history or []):
+        if turn.get("role") != "user":
+            continue
+        content = str(turn.get("content") or "").strip()
+        if len(content.split()) >= 3 and not read_outcome(content):
+            return content
+    return ""
+
+
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         body = read_json(self)
         message = (body.get("message") or "").strip()
         history = body.get("history") or []
+        # The article the chat was last looking at, so a follow-up keeps its place.
+        active = body.get("article") or None
 
         if not message:
             return send_json(self, 400, {"message": "A message is required"})
 
+        def reply(text, answered, escalate, source, article=None, retrieval=()):
+            return send_json(self, 200, {
+                "reply": text,
+                "answered": answered,
+                "escalate": escalate,
+                "source": source,
+                "article": article,
+                "retrieval": list(retrieval),
+            })
+
         chat_reply = small_talk_reply(message)
         if chat_reply:
-            return send_json(self, 200, {
-                "reply": chat_reply,
-                "answered": True,
-                "escalate": False,
-                "source": "greeting",
-                "article": None,
-                "retrieval": [],
-            })
+            return reply(chat_reply, True, False, "greeting")
+
+        outcome = read_outcome(message)
+        if outcome == "resolved":
+            return reply("Great, glad that's sorted. Anything else I can help with?",
+                         True, False, "greeting")
+
+        # "It didn't work" is not a new question -- it is the end of the steps we
+        # already gave. Escalate on the article in play rather than re-running
+        # retrieval on three words and reporting that nothing matched.
+        if outcome == "failed" and active:
+            return reply(escalation_line(active), True, True, "followup", active)
 
         hits, info = search(message)
 
+        # A short follow-up ("what about the other one?") can carry too little
+        # on its own. Retry with the previous question attached before giving up.
+        if not info["confident"]:
+            context = last_question(history)
+            if context and len(message.split()) <= 10:
+                hits, info = search(context + " " + message)
+
         if not info["confident"] or not hits:
-            return send_json(self, 200, {
-                "reply": NO_ANSWER,
-                "answered": False,
-                "escalate": True,
-                "source": "none",
-                "article": None,
-                "retrieval": info["retrievers"],
-            })
+            if outcome == "failed":
+                return reply(escalation_line(active), True, True, "followup", active)
+            return reply(NO_ANSWER, False, True, "none", None, info["retrievers"])
 
         top = hits[0]["article"]
         api_key = os.environ.get("OPENROUTER_API_KEY")
 
         if api_key:
             try:
-                reply = ask_model(message, history, hits, api_key)
-                if reply:
-                    return send_json(self, 200, {
-                        "reply": reply,
-                        "answered": True,
-                        "escalate": False,
-                        "source": "openrouter",
-                        "article": summarise(top),
-                        "retrieval": info["retrievers"],
-                    })
-                # The model read the articles and judged them not to cover it.
-                return send_json(self, 200, {
-                    "reply": NO_ANSWER,
-                    "answered": False,
-                    "escalate": True,
-                    "source": "openrouter",
-                    "article": None,
-                    "retrieval": info["retrievers"],
-                })
+                written = ask_model(message, history, hits, api_key)
+                if written:
+                    return reply(written, True, False, "openrouter",
+                                 summarise(top), info["retrievers"])
+                return reply(NO_ANSWER, False, True, "openrouter", None, info["retrievers"])
             except Exception as exc:
                 print("OpenRouter call failed:", exc)
             # Fall through to the knowledge base steps rather than failing.
 
-        return send_json(self, 200, {
-            "reply": "Here are the steps for this. Try them in order and tell me "
-                     "whether it helps.\n\n" + render_article(top),
-            "answered": True,
-            "escalate": False,
-            "source": "kb-fallback" if api_key else "kb",
-            "article": summarise(top),
-            "retrieval": info["retrievers"],
-        })
+        return reply(
+            "Here are the steps for this. Try them in order and tell me how you get on.\n\n"
+            + render_article(top),
+            True, False, "kb-fallback" if api_key else "kb",
+            summarise(top), info["retrievers"])
 
     def do_GET(self):
         """Health check: which retrievers are live."""
