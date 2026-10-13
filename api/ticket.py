@@ -152,13 +152,13 @@ class handler(BaseHTTPRequestHandler):
         })
 
     def do_GET(self):
-        """Health check: is Freshdesk wired up, and where would tickets land."""
-        send_json(self, 200, {
-            "configured": configured(),
-            "domain": api_url() if DOMAIN else None,
-            "group_id": GROUP_ID or None,
-            "product_id": PRODUCT_ID or None,
-        })
+        """Health check: is Freshdesk wired up.
+
+        Deliberately says nothing else. This route is public, and the helpdesk
+        domain, group id and product id are infrastructure details that give an
+        attacker a head start for no benefit to anyone legitimate.
+        """
+        send_json(self, 200, {"configured": configured()})
 
     def log_message(self, *args):
         pass
