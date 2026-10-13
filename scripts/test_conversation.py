@@ -116,6 +116,12 @@ CASES = [
     ("it's working now thanks", OUTLOOK, "resolved"),
     ("it is working now", OUTLOOK, "resolved"),
 
+    # "it's not working" is our fix failing, not a new problem. The apostrophe
+    # swallows the "is", leaving a bare "not" to carry the negation.
+    ("it's not working", OUTLOOK, "followup"),
+    ("that's not working", OUTLOOK, "followup"),
+    ("i have tried everything but it's not working", OUTLOOK, "followup"),
+
     # still out of scope
     ("how do I book annual leave", None, "none"),
     ("what is the share price of nomura", None, "none"),

@@ -32,6 +32,12 @@ CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_MODEL = "openai/gpt-5.1"
 MAX_HISTORY = 10
 
+# Every call to the model carries at least the last three exchanges. The
+# smaller replies -- the probe, the decline, the alternative -- were getting
+# one or two messages, which is how the alternative lost the thread and
+# answered a dead laptop with Outlook steps.
+CONTEXT_MESSAGES = 6
+
 # Canned replies. These are the lines a person actually reads when the model
 # is not involved, so they are written the way a colleague would say them.
 NO_ANSWER = (
@@ -67,8 +73,10 @@ FILLER_WORDS = {
 # working"), not how they report one of our fixes failing.
 FAILED_RE = re.compile(
     r"\b("
-    r"(it|that|this|they|those|steps?)\s+(still\s+)?"
-    r"(didn'?t|did\s+not|doesn'?t|does\s+not|hasn'?t|isn'?t|is\s+not|won'?t|wont)\s+"
+    r"(it|that|this|they|those|steps?)(\s+|'?s\s+)(still\s+)?"
+    # bare "not" matters: in "it's not working" the "is" is inside the
+    # contraction, so only "not" is left to carry the negation
+    r"(didn'?t|did\s+not|doesn'?t|does\s+not|hasn'?t|isn'?t|is\s+not|won'?t|wont|not)\s+"
     r"(work|working|worked|help|helped|fix|fixed|open|connect)"
     r"|still\s+(not\s+work\w*|isn'?t\s+work\w*|doesn'?t\s+work\w*|the\s+same|broken|happening|stuck|dead|down|failing|the\s+issue)"
     r"|no\s+(luck|joy|change|difference)"
@@ -286,7 +294,7 @@ VOICE
 ANSWERING
 - If you open with an acknowledgement, make it one short line in your own words that adds something - the likely cause, or what you have ruled out. Never parrot their message back.
 - Then the steps, as a numbered list, in the order the article gives them. Do not invent, reorder, merge or add steps.
-- Close by asking them to try it and say how they get on. If one of the other articles is a plausible second cause, add one short line naming it as the next thing to look at - a single line, never its steps.
+- Close by asking them to try it and say how they get on. If another article marked related="yes" is a plausible second cause, add one short line naming it as the next thing to look at - a single line, never its steps. An article marked related="no" is from a different area: answer from it if it genuinely fits better, but never offer it as the next thing to try. A laptop that will not turn on is not an email problem.
 - Keep the whole reply under 120 words.
 
 WHEN THE PROBLEM IS UNCLEAR
@@ -317,7 +325,7 @@ Rules:
 - Under 40 words."""
 
 
-def short_reply(system, message, history, api_key, fallback, turns=4):
+def short_reply(system, message, history, api_key, fallback, turns=CONTEXT_MESSAGES):
     """One small model call for the conversational replies that carry no steps.
 
     Each of these is a moment where a model is tempted to improvise an answer,
@@ -402,7 +410,7 @@ def alternative_reply(article, message, history, api_key):
     prompt = "Another article that might apply:\n\n%s\n\nThey said: %s" % (block, message)
     fallback = ("That wasn't it, then. This might be the cause instead:\n\n"
                 + render_article(article))
-    return short_reply(ALTERNATIVE_SYSTEM, prompt, history, api_key, fallback, turns=2)
+    return short_reply(ALTERNATIVE_SYSTEM, prompt, history, api_key, fallback)
 
 
 def decline_reply(message, history, api_key, profile=None):
@@ -417,7 +425,7 @@ def decline_reply(message, history, api_key, profile=None):
         return NO_ANSWER
 
     messages = [{"role": "system", "content": DECLINE_SYSTEM}]
-    for turn in history[-4:]:
+    for turn in history[-CONTEXT_MESSAGES:]:
         if turn.get("role") in ("user", "assistant") and turn.get("content"):
             messages.append({"role": turn["role"], "content": str(turn["content"])[:1000]})
     messages.append({"role": "user", "content": message})
@@ -445,12 +453,34 @@ def decline_reply(message, history, api_key, profile=None):
         return NO_ANSWER
 
 
+def same_area(hits):
+    """Keep the best hit, and the others only if they are about the same thing.
+
+    The model is given three articles so it can pick the one that fits. The
+    cost is that it also volunteers the others as "the next thing to look at",
+    and a cross-area neighbour produces advice like checking VPN and browser
+    access for a laptop that will not switch on. The best hit still wins
+    whatever area it is in; the supporting ones have to belong with it.
+    """
+    if not hits:
+        return hits
+    section = hits[0]["article"].get("section")
+    return [hits[0]] + [h for h in hits[1:] if h["article"].get("section") == section]
+
+
 def build_context(hits):
+    lead_section = hits[0]["article"].get("section") if hits else None
     blocks = []
     for i, hit in enumerate(hits, 1):
         article = hit["article"]
+        # An article from another area may still be the right answer, but
+        # offering one as "the next thing to look at" is how a dead laptop ended
+        # up with advice about Outlook syncing. Marking them lets the prompt
+        # separate answering from suggesting.
+        related = "yes" if article.get("section") == lead_section else "no"
         lines = [
-            '<article index="%d" section="%s">' % (i, article.get("section") or ""),
+            '<article index="%d" section="%s" related="%s">'
+            % (i, article.get("section") or "", related),
             "Issue: " + article["title"],
             "Steps:",
         ]
@@ -537,25 +567,44 @@ def next_best(history, active):
     question = last_question(history)
     if not question:
         return None
-    hits, info = search(question, limit=4)
+    hits, info = search(question, limit=5)
     if not info["confident"]:
         return None
+
     active_id = (active or {}).get("id")
+    section = (active or {}).get("section")
+
     for hit in hits:
-        if hit["article"]["id"] != active_id:
-            return hit["article"]
+        article = hit["article"]
+        if article["id"] == active_id:
+            continue
+        # Stay in the same part of the knowledge base. A laptop that will not
+        # turn on is not an email problem, and offering email steps for it is
+        # worse than admitting we are out of ideas.
+        if section and article.get("section") != section:
+            continue
+        return article
     return None
 
 
 def last_question(history):
-    """The most recent substantive thing they asked, for context on a follow-up."""
+    """The most recent thing they asked that actually names a problem.
+
+    "I don't know, nothing is working" is three words of nothing. Searching on
+    it returns whatever the common words happen to score against -- in one real
+    conversation, an Outlook article in the middle of a dead-laptop thread.
+    """
+    fallback = ""
     for turn in reversed(history or []):
         if turn.get("role") != "user":
             continue
         content = str(turn.get("content") or "").strip()
-        if len(content.split()) >= 3 and not read_outcome(content):
+        if len(content.split()) < 3 or read_outcome(content):
+            continue
+        if mentions_topic(content):
             return content
-    return ""
+        fallback = fallback or content
+    return fallback
 
 
 class handler(BaseHTTPRequestHandler):
@@ -673,7 +722,7 @@ class handler(BaseHTTPRequestHandler):
 
         if api_key:
             try:
-                written = ask_model(message, history, hits, api_key, profile)
+                written = ask_model(message, history, same_area(hits), api_key, profile)
                 if written:
                     return reply(written, True, False, "openrouter",
                                  summarise(top), info["retrievers"])
