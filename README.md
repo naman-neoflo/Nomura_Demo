@@ -63,7 +63,8 @@ chat feel robotic, so the route reads the turn first:
 | "Don't raise a ticket, I want it fixed here" | Does not offer the ticket again. Says plainly that the steps given are all there is, and asks which one failed. |
 | "Yes, raise a ticket" / "can I speak to someone" | Agrees, and names the team and priority the issue routes to. |
 | Anything else | Retrieval. |
-| Nothing found | The decline is written from the conversation, naming what was actually asked, rather than one canned line for everything. |
+| Nothing found, first time | Engages instead of giving up: says what it does not have, then asks a question or names the areas it does cover. No ticket offered yet. |
+| Nothing found, again | Now declines, written from the conversation, and offers the handoff. |
 
 A turn only counts as small talk when every word in it is a pleasantry, so
 "hi my outlook won't open" still goes through retrieval.
@@ -135,6 +136,16 @@ route falls back to the article's steps rather than failing the chat.
 **Feedback.** Every assistant message carries thumbs up / thumbs down. Thumbs up
 acknowledges and stops. Thumbs down — and any question the knowledge base cannot
 answer — offers the two escalation routes:
+
+**Escalation is the end of a sequence, not the first answer to not knowing
+something.** The steps failing once produces a second article to try, not a
+ticket; a question with no match produces a probe, not a decline. Only the
+second failure offers the handoff. The widget tracks where the conversation is
+(`declines`, `attempts`, `tried`) and the route decides from that.
+
+When it does escalate, it routes on the **most severe** article tried, so
+walking someone through a lower-priority alternative cannot quietly downgrade
+the ticket.
 
 - **Raise a ticket** → `POST /api/ticket`, which calls Freshdesk directly.
   Team and priority are inherited from the knowledge base article's own

@@ -355,6 +355,18 @@ TOPIC_TERMS = frozenset(
 ) - {"not", "work", "cannot", "issue", "problem", "your", "keep", "stuck", "access"}
 
 
+# What the knowledge base can actually talk about, for when it cannot answer and
+# needs to offer the colleague somewhere useful to go instead.
+SECTIONS = []
+for _a in ARTICLES:
+    if _a.get("section") and _a["section"] not in SECTIONS:
+        SECTIONS.append(_a["section"])
+
+
+def coverage():
+    return SECTIONS
+
+
 def mentions_topic(text):
     """Does this message name something the knowledge base covers?"""
     return any(t in TOPIC_TERMS for t in _tokenize(text))

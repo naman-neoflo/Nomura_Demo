@@ -25,7 +25,7 @@ from http.server import BaseHTTPRequestHandler
 
 from _http import method_not_allowed, read_json, send_json
 from _net import post_json
-from _search import (index_status, install_intent, mentions_topic,
+from _search import (coverage, index_status, install_intent, mentions_topic,
                      render_article, search, software_articles)
 
 CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -214,6 +214,21 @@ def gave_steps(history):
     return False
 
 
+SEVERITY = {"P1": 3, "P2": 2, "P3": 1}
+
+
+def most_severe(articles):
+    """The article whose routing should carry the handoff.
+
+    Trying an adjacent, lower-priority article must not quietly downgrade the
+    ticket: someone who cannot work is still someone who cannot work.
+    """
+    candidates = [a for a in articles if a and (a.get("escalation") or {}).get("priority")]
+    if not candidates:
+        return next((a for a in articles if a), None)
+    return max(candidates, key=lambda a: SEVERITY.get(a["escalation"]["priority"], 0))
+
+
 def escalation_line(article, after_steps=True):
     """What to say once the issue is still there and the chat cannot fix it.
 
@@ -251,7 +266,7 @@ VOICE
 ANSWERING
 - If you open with an acknowledgement, make it one short line in your own words that adds something - the likely cause, or what you have ruled out. Never parrot their message back.
 - Then the steps, as a numbered list, in the order the article gives them. Do not invent, reorder, merge or add steps.
-- Close by asking them to try it and say how they get on.
+- Close by asking them to try it and say how they get on. If one of the other articles is a plausible second cause, add one short line naming it as the next thing to look at - a single line, never its steps.
 - Keep the whole reply under 120 words.
 
 WHEN THE PROBLEM IS UNCLEAR
@@ -280,6 +295,94 @@ Rules:
 - If what they asked is clearly nothing to do with IT, say so plainly rather than implying it might be.
 - No stock openers ("Got it", "Sounds like", "Sorry to hear"), no apologising twice, no emoji, no sign-off.
 - Under 40 words."""
+
+
+def short_reply(system, message, history, api_key, fallback, turns=4):
+    """One small model call for the conversational replies that carry no steps.
+
+    Each of these is a moment where a model is tempted to improvise an answer,
+    so the system prompt does the constraining and every one of them falls back
+    to a fixed line when there is no key or the call fails.
+    """
+    if not api_key:
+        return fallback
+
+    messages = [{"role": "system", "content": system}]
+    for turn in (history or [])[-turns:]:
+        if turn.get("role") in ("user", "assistant") and turn.get("content"):
+            messages.append({"role": turn["role"], "content": str(turn["content"])[:1000]})
+    messages.append({"role": "user", "content": message})
+
+    try:
+        status, raw = post_json(
+            CHAT_URL,
+            {
+                "model": os.environ.get("OPENROUTER_MODEL", DEFAULT_MODEL),
+                "messages": messages,
+                "max_tokens": 700,
+                "reasoning": {"effort": "low"},
+            },
+            headers={"Authorization": "Bearer " + api_key,
+                     "X-Title": "Nomura IT Service Desk"},
+            timeout=30,
+        )
+        if status != 200:
+            raise RuntimeError("returned %d" % status)
+        text = ((json.loads(raw).get("choices") or [{}])[0]
+                .get("message", {}).get("content") or "").strip()
+        return text or fallback
+    except Exception as exc:
+        print("short reply failed, using the fixed line:", exc)
+        return fallback
+
+
+PROBE_SYSTEM = """You are Aria, the IT service desk assistant for Nomura, talking to a colleague over chat.
+
+Nothing in your material matches what they just asked. Do NOT give up on them and do NOT offer a ticket yet - you have not actually tried to help.
+
+Write a short reply that:
+- says, in one clause, that you do not have anything on that specific thing
+- then does something useful: either ask one plain-prose question that would let you place the problem, or name two or three of the areas below that it might fall under and ask which is closest
+
+You can help with: %s
+
+Rules:
+- Never invent steps, causes or fixes. You genuinely do not know this one.
+- Do not mention tickets, callbacks, specialists or escalation. That comes later if this fails.
+- No stock openers, no emoji, no numbered menus. Under 50 words."""
+
+
+ALTERNATIVE_SYSTEM = """You are Aria, the IT service desk assistant for Nomura, talking to a colleague over chat.
+
+The steps you gave did not fix it. Below is another article that might apply instead. Do NOT offer a ticket yet - there is still something to try.
+
+Write a short reply that:
+- acknowledges in one clause that the first lot did not work
+- says what else it could be, in your own words
+- gives that article's steps as a numbered list, in its order, unchanged
+
+Rules:
+- Use only the steps given. Never invent, reorder or add any.
+- Do not mention tickets, callbacks, specialists, team names, priorities or escalation.
+- No stock openers, no emoji. Under 110 words."""
+
+
+def probe_reply(message, history, api_key):
+    """First time we cannot answer: engage, do not hand them off."""
+    fallback = ("I don't have anything on that specific thing. Tell me a bit more about "
+                "what you're seeing and I'll check whether it falls under something I do "
+                "cover \u2014 email, VPN, the network, laptops, printers, access or software.")
+    return short_reply(PROBE_SYSTEM % ", ".join(coverage()),
+                       message, history, api_key, fallback)
+
+
+def alternative_reply(article, message, history, api_key):
+    """The steps failed, but another article might fit. Try that before escalating."""
+    block = build_context([{"article": article}])
+    prompt = "Another article that might apply:\n\n%s\n\nThey said: %s" % (block, message)
+    fallback = ("That wasn't it, then. This might be the cause instead:\n\n"
+                + render_article(article))
+    return short_reply(ALTERNATIVE_SYSTEM, prompt, history, api_key, fallback, turns=2)
 
 
 def decline_reply(message, history, api_key, profile=None):
@@ -405,6 +508,25 @@ def summarise(article):
     }
 
 
+def next_best(history, active):
+    """A different article that might explain what the first one did not.
+
+    Re-runs retrieval on the original question rather than on "it didn't work",
+    which carries no topic, and skips whatever we already tried.
+    """
+    question = last_question(history)
+    if not question:
+        return None
+    hits, info = search(question, limit=4)
+    if not info["confident"]:
+        return None
+    active_id = (active or {}).get("id")
+    for hit in hits:
+        if hit["article"]["id"] != active_id:
+            return hit["article"]
+    return None
+
+
 def last_question(history):
     """The most recent substantive thing they asked, for context on a follow-up."""
     for turn in reversed(history or []):
@@ -422,6 +544,11 @@ class handler(BaseHTTPRequestHandler):
         message = (body.get("message") or "").strip()
         history = body.get("history") or []
         profile = body.get("profile") or {}
+        # How far into "we can't fix this" we already are. Escalation is the end
+        # of a sequence, not the first response to not knowing something.
+        declines = int(body.get("declines") or 0)
+        attempts = int(body.get("attempts") or 0)
+        tried = [a for a in (body.get("tried") or []) if isinstance(a, dict)]
         # The article the chat was last looking at, so a follow-up keeps its place.
         active = body.get("article") or None
 
@@ -484,8 +611,19 @@ class handler(BaseHTTPRequestHandler):
         if outcome == "failed" and (
             not mentions_topic(message) or not info["confident"] or same_topic
         ):
-            return reply(escalation_line(active, gave_steps(history)),
-                         True, True, "followup", active)
+            # First time the steps fail, look for another article that could
+            # explain it. Handing someone to a ticket after one attempt is the
+            # behaviour of a form, not a service desk.
+            if attempts == 0:
+                other = next_best(history, active)
+                if other:
+                    return reply(
+                        alternative_reply(other, message, history,
+                                          os.environ.get("OPENROUTER_API_KEY")),
+                        True, False, "alternative", summarise(other))
+            route_on = most_severe(tried + [active])
+            return reply(escalation_line(route_on, gave_steps(history)),
+                         True, True, "followup", route_on)
 
         # Someone asking to install something has asked a question we answer,
         # even when the product is not one we recognise. Hand the model the
@@ -500,8 +638,13 @@ class handler(BaseHTTPRequestHandler):
             # Short, unmatched, and mid-conversation: far likelier to be a reply
             # to what we just said than a new question we have nothing for.
             if active and len(message.split()) <= 6:
-                return reply(escalation_line(active, gave_steps(history)),
-                             True, True, "followup", active)
+                route_on = most_severe(tried + [active])
+                return reply(escalation_line(route_on, gave_steps(history)),
+                             True, True, "followup", route_on)
+            # Say "I don't know" only after having tried to place the problem.
+            if declines == 0:
+                return reply(probe_reply(message, history, os.environ.get("OPENROUTER_API_KEY")),
+                             False, False, "probe", None, info["retrievers"])
             return reply(decline_reply(message, history, os.environ.get("OPENROUTER_API_KEY"), profile),
                          False, True, "none", None, info["retrievers"])
 
@@ -514,6 +657,9 @@ class handler(BaseHTTPRequestHandler):
                 if written:
                     return reply(written, True, False, "openrouter",
                                  summarise(top), info["retrievers"])
+                if declines == 0:
+                    return reply(probe_reply(message, history, api_key),
+                                 False, False, "probe", None, info["retrievers"])
                 return reply(decline_reply(message, history, api_key, profile),
                              False, True, "openrouter", None, info["retrievers"])
             except Exception as exc:

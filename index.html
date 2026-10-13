@@ -511,6 +511,9 @@
   var history = [];       // [{role, content}] sent back for context
   var lastArticle = null; // knowledge base article behind the last answer
   var profile = null;     // {name, email} - asked for once, reused everywhere
+  var tried = [];         // every article we have walked them through
+  var declines = 0;       // consecutive turns we could not answer
+  var attempts = 0;       // times they have told us the steps did not work
   var pendingQuestion = null;
   var busy = false;
 
@@ -847,7 +850,10 @@
         message: text,
         history: history.slice(0, -1),
         article: lastArticle,
-        profile: profile
+        profile: profile,
+        declines: declines,
+        attempts: attempts,
+        tried: tried
       })
     })
       .then(function (res) {
@@ -860,7 +866,25 @@
         history.push({ role: "assistant", content: data.reply });
         // Hold on to the last article we actually answered from, so a later
         // "that didn't work" still knows which steps it refers to.
-        if (data.article) lastArticle = data.article;
+        if (data.article) {
+          lastArticle = data.article;
+          if (!tried.some(function (a) { return a.id === data.article.id; })) {
+            tried.push(data.article);
+          }
+        }
+
+        // Track how far along the "we can't fix this" sequence we are, so the
+        // server knows whether to keep trying or offer the handoff.
+        if (data.source === "probe" || data.source === "none") {
+          declines += 1;
+        } else if (data.answered) {
+          declines = 0;
+        }
+        if (data.source === "alternative") {
+          attempts += 1;
+        } else if (data.source === "followup") {
+          attempts = 0;
+        }
 
         addFeedback(el, data.article);
         if (data.escalate) {
