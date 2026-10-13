@@ -118,6 +118,70 @@ def small_talk_reply(message):
     return None
 
 
+# "No, don't raise a ticket, I want it fixed here." Offering the ticket again
+# is the one thing not to do.
+DECLINE_RE = re.compile(
+    r"("
+    # a negation, then "ticket"/"callback" within a short span. The span cannot
+    # cross punctuation, so "I don't know, raise a ticket" still reads as
+    # wanting one.
+    r"\b(don'?t|dont|do\s+not|no|without|rather\s+not)\b[^,.?!;]{0,25}?"
+    r"\b(ticket|callback|call\s+back|transfer|escalate|specialist)\b"
+    r"|\b(want|need)\b[^,.?!;]{0,20}?\b(resolution|fix|solution|answer)\b[^,.?!;]{0,12}?\bhere\b"
+    r"|\b(fix|resolve|solve|sort)\s+it\s+(here|now|myself)\b"
+    r"|\b(can|could)\s+you\s+(just\s+)?(fix|resolve|solve|sort)\s+it\b"
+    r")",
+    re.I,
+)
+
+
+# The opposite: asking for the handoff outright. Answering that with "sorry,
+# that usually does it" is wrong-footed -- they asked, so just agree.
+REQUEST_RE = re.compile(
+    r"\b(yes|yeah|ok|okay|please|pls)?\s*\b"
+    r"(raise|create|open|log|make)\s+(a\s+|the\s+)?ticket\b"
+    r"|\b(i\s+)?(want|need|would\s+like)\s+(a\s+)?(ticket|callback|call\s+back)\b"
+    r"|\b(put|get)\s+me\s+through\b"
+    r"|\b(speak|talk)\s+to\s+(a\s+)?(human|person|agent|specialist|someone)\b",
+    re.I,
+)
+
+
+def requests_escalation(message):
+    return bool(REQUEST_RE.search(message or ""))
+
+
+def handoff_line(article):
+    """Reply when they ask for the handoff themselves."""
+    route = (article or {}).get("escalation") or {}
+    team, priority = route.get("team"), route.get("priority")
+    if team and priority:
+        named = team.endswith("Team") or team.endswith("Desk")
+        return ("Of course. This goes to %s%s as a %s. Use the buttons below to "
+                "raise it, or ask for a callback instead."
+                % ("the " if named else "", team, priority))
+    return ("Of course. Use the buttons below to raise a ticket, or ask for a "
+            "callback instead.")
+
+
+def declines_escalation(message):
+    return bool(DECLINE_RE.search(message or ""))
+
+
+def keep_going_line(article):
+    """Reply when someone turns down the handoff and wants to continue here.
+
+    Honest about the limit: the steps are the knowledge base's, and there is
+    nothing further to offer beyond them.
+    """
+    if article and article.get("title"):
+        return ("Understood, let's keep it here. What I gave you is everything I "
+                "have on this one \u2014 so tell me which step you got to and exactly "
+                "what happened, and I'll check whether something else covers it.")
+    return ("Understood. Tell me what's going wrong and what you've already tried, "
+            "and I'll give you the steps.")
+
+
 def read_outcome(message):
     """Did they just tell us the steps worked, or that they didn't?"""
     if RESOLVED_RE.search(message):
@@ -304,6 +368,13 @@ class handler(BaseHTTPRequestHandler):
         chat_reply = small_talk_reply(message)
         if chat_reply:
             return reply(chat_reply, True, False, "greeting")
+
+        # Check the refusal first: "I don't want a ticket" also contains "ticket".
+        if declines_escalation(message):
+            return reply(keep_going_line(active), True, False, "continue", active)
+
+        if requests_escalation(message):
+            return reply(handoff_line(active), True, True, "handoff", active)
 
         outcome = read_outcome(message)
         if outcome == "resolved":

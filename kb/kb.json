@@ -637,6 +637,7 @@
   },
   {
    "section": "Ticket Priority & SLA",
+   "internal": true,
    "title": "Ticket priority levels and response times",
    "steps": [
     "P1 - Employee completely cannot work - SLA 1 hour",
@@ -650,6 +651,7 @@
   },
   {
    "section": "Ticket Priority & SLA",
+   "internal": true,
    "title": "Which team handles which issue",
    "steps": [
     "Email, Outlook, Teams, Slack - Messaging Team",

@@ -64,7 +64,13 @@ VECTOR_FLOOR = float(os.environ.get("VECTOR_FLOOR", "0.285"))
 RRF_K = 60  # reciprocal rank fusion constant
 
 with open(KB_JSON, encoding="utf-8") as fh:
-    ARTICLES = json.load(fh)["articles"]
+    ALL_ARTICLES = json.load(fh)["articles"]
+
+# Internal articles (the routing and SLA tables) are operational metadata, not
+# answers. They stay in kb.json as the record of how escalation is routed, but
+# they are never retrieved -- a question containing "ticket" would otherwise
+# surface the routing table and the model would read it out as steps.
+ARTICLES = [a for a in ALL_ARTICLES if not a.get("internal")]
 
 # --------------------------------------------------------------------------
 # BM25

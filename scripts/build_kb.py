@@ -163,10 +163,18 @@ def is_title(line, lines, idx):
 
 
 def reference_chunks():
-    """The SLA and routing tables, kept as their own lookups."""
+    """The SLA and routing tables.
+
+    Marked internal: they are operational metadata, not an answer to anyone's
+    problem. Left retrievable, the word "ticket" in a question pulls them up and
+    the model reads the routing table out as if it were troubleshooting steps.
+    Escalation routing comes from each article's own escalation field, so
+    nothing depends on these being searchable.
+    """
     return [
         {
             "section": "Ticket Priority & SLA",
+            "internal": True,
             "title": "Ticket priority levels and response times",
             "steps": [
                 "P1 - Employee completely cannot work - SLA 1 hour",
@@ -178,6 +186,7 @@ def reference_chunks():
         },
         {
             "section": "Ticket Priority & SLA",
+            "internal": True,
             "title": "Which team handles which issue",
             "steps": [
                 "Email, Outlook, Teams, Slack - Messaging Team",

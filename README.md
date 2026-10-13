@@ -58,7 +58,9 @@ chat feel robotic, so the route reads the turn first:
 | --- | --- |
 | A greeting ("Hi", "Hii", "Heyy") | A short hello. Elongated spellings are normalised, so "Hiii" is a greeting, not a failed search. |
 | A thank-you or "that worked" | A warm close, no escalation offered. |
-| "It didn't work" / "still not working" | Not a new question — it is the end of the steps already given. Escalates on the article in play, quoting the knowledge base's own routing ("this needs the Messaging Team … a P2 ticket"). |
+| "It didn't work" / "still not working" | Not a new question — it is the end of the steps already given. Escalates on the article in play, quoting the knowledge base's own routing. |
+| "Don't raise a ticket, I want it fixed here" | Does not offer the ticket again. Says plainly that the steps given are all there is, and asks which one failed. |
+| "Yes, raise a ticket" / "can I speak to someone" | Agrees, and names the team and priority the issue routes to. |
 | Anything else | Retrieval. |
 
 A turn only counts as small talk when every word in it is a pleasantry, so
@@ -93,9 +95,9 @@ They keep separate confidence floors, because their scores are on unrelated
 scales; either retriever being sure is enough to answer. Measured by `python3 scripts/test_retrieval.py`:
 
 ```
-top-1 (used when no LLM key is set): 31/31
-top-3 (what the model receives):     31/31
-out-of-scope correctly declined:     3/3
+top-1 (used when no LLM key is set): 30/30
+top-3 (what the model receives):     30/30
+out-of-scope correctly declined:     5/5
 ```
 
 Both floors are measured, not guessed. The test prints the gap between the
@@ -155,6 +157,7 @@ Three sources feed `kb/kb.json`:
 | Source | Articles | Status |
 | --- | --- | --- |
 | `Nomura_IT_Knowledge_Base.pdf` | 26 | Real. Email, Teams, VPN, network, hardware, access, printers. |
+| …its routing and SLA tables | 2 | **Internal.** Never retrieved — see below. |
 | `software_catalog.json` | 2 | The 15 approved packages from the voice agent prompt. |
 | `sample_articles.json` | 3 | **Sample.** Password reset, lockout, expiry. |
 
@@ -162,6 +165,13 @@ The PDF covers general IT faults but not identity or software, yet both are
 callback reasons the voice agent handles — so the chat used to deny "I want to
 install software" and "I forgot my password" outright. The two JSON files fill
 those gaps and are meant to be edited.
+
+The PDF's routing and SLA tables are kept in `kb.json` but marked `internal`
+and excluded from both retrievers. They are operational metadata, not an answer
+to anyone's problem: left searchable, the word "ticket" in a question pulled
+them up and the model read the routing table out as if it were troubleshooting
+steps. Escalation routing comes from each article's own `escalation` field, so
+nothing depends on them being searchable.
 
 **`sample_articles.json` is placeholder content**, written from common corporate
 IT practice, not from Nomura procedure. The portal names, the 15-minute lockout
@@ -182,7 +192,7 @@ python3 scripts/test_conversation.py        # turn handling
 
 **Commit `kb/kb.faiss` and `kb/kb_index.json`.** They are build artefacts, but
 Vercel has no key at build time, so the deployed function reads them from the
-repo. They are small — 33 vectors is about 200 KB at 1536 dimensions.
+repo. They are small — 31 vectors is about 190 KB at 1536 dimensions.
 
 The PDF parser reads the arrow glyph, which extracts as the characters `fi`.
 Only a standalone `fi` is an arrow — replacing every occurrence corrupts

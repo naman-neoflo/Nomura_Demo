@@ -34,6 +34,10 @@ def decide(message, active=None):
     # "thanks that worked" is all pleasantries, so the small-talk path answers
     # it before read_outcome is consulted. Both close the thread; tell them
     # apart by which reply came back.
+    if chat_route.declines_escalation(message):
+        return "continue"
+    if chat_route.requests_escalation(message):
+        return "handoff"
     pleasantry = chat_route.small_talk_reply(message)
     if pleasantry:
         return "greeting" if pleasantry.startswith("Hi ") else "resolved"
@@ -91,6 +95,16 @@ CASES = [
     ("i forgot my password", None, "answer"),
     ("my account is locked", None, "answer"),
     ("my password is expiring soon", None, "answer"),
+
+    # turning down the handoff must not offer the handoff again, and must not
+    # surface the routing tables as if they were steps
+    ("no don't create a ticket i want the resolution here", LAPTOP, "continue"),
+    ("no ticket please", LAPTOP, "continue"),
+    ("dont raise a ticket", OUTLOOK, "continue"),
+    ("can you just fix it", LAPTOP, "continue"),
+    ("yes please raise a ticket", LAPTOP, "handoff"),
+    ("can I speak to a person", LAPTOP, "handoff"),
+    ("i want a callback", LAPTOP, "handoff"),
 
     # still out of scope
     ("how do I book annual leave", None, "none"),

@@ -43,7 +43,6 @@ CASES = [
     ("mfa isn't working", "Multi-Factor Authentication (MFA) Not Working"),
     ("printer says offline", "Cannot Print — Printer Offline"),
     ("print jobs are stuck", "Print Jobs Stuck in Queue"),
-    ("what is a p1 ticket", "Ticket priority levels and response times"),
     # Software installation and identity - not in the PDF, added from
     # kb/software_catalog.json and kb/sample_articles.json.
     ("i want to install software in my laptop", "Install approved software on your laptop"),
@@ -53,7 +52,10 @@ CASES = [
     ("how do I reset my password", "Reset your Nomura password"),
     ("my account is locked", "Account locked after too many failed sign-ins"),
     ("my password is expiring soon", "Password expiring soon"),
-    # Out of scope - should be declined.
+    # Out of scope - should be declined. The routing and SLA tables are marked
+    # internal, so questions about tickets no longer surface them as answers.
+    ("what is a p1 ticket", None),
+    ("no don't create a ticket i want the resolution here", None),
     ("how do I book annual leave", None),
     ("what is the share price of nomura", None),
     ("can you order me a new desk chair", None),

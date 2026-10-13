@@ -67,7 +67,7 @@ def main():
     model = os.environ.get("EMBEDDING_MODEL", _search.DEFAULT_EMBED_MODEL)
 
     with open(KB_JSON, encoding="utf-8") as fh:
-        articles = json.load(fh)["articles"]
+        articles = [a for a in json.load(fh)["articles"] if not a.get("internal")]
 
     print("embedding %d articles with %s" % (len(articles), model))
     texts = [passage(a) for a in articles]
