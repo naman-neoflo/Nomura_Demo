@@ -18,10 +18,32 @@ import json
 import math
 import os
 import re
-import urllib.error
-import urllib.request
+
+from _net import post_json
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _load_dotenv():
+    """Read .env for local development. On Vercel the environment is already
+    set, and no .env file is deployed, so this is a no-op there. Existing
+    variables always win."""
+    path = os.path.join(ROOT, ".env")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                key, value = key.strip(), value.strip().strip('"').strip("'")
+                if key and value and key not in os.environ:
+                    os.environ[key] = value
+    except OSError:
+        pass
+
+
+_load_dotenv()
 KB_JSON = os.path.join(ROOT, "kb", "kb.json")
 INDEX_PATH = os.path.join(ROOT, "kb", "kb.faiss")
 INDEX_META = os.path.join(ROOT, "kb", "kb_index.json")
@@ -32,9 +54,10 @@ DEFAULT_EMBED_MODEL = "openai/text-embedding-3-small"
 # Calibrated in scripts/test_retrieval.py. The weakest genuine question scores
 # 6.2 on BM25; the best out-of-scope one scores 3.0.
 BM25_FLOOR = float(os.environ.get("BM25_FLOOR", "4.5"))
-# Cosine floor. Provisional until the index exists -- run the test script with
-# OPENROUTER_API_KEY set and it prints the separation to calibrate against.
-VECTOR_FLOOR = float(os.environ.get("VECTOR_FLOOR", "0.34"))
+# Cosine floor, measured in scripts/test_retrieval.py against the built index:
+# the weakest genuine question scores 0.438, the strongest out-of-scope one
+# 0.325. 0.38 sits in the middle of that gap.
+VECTOR_FLOOR = float(os.environ.get("VECTOR_FLOOR", "0.38"))
 
 RRF_K = 60  # reciprocal rank fusion constant
 
@@ -207,22 +230,18 @@ def embed(texts, model=None, api_key=None, timeout=30):
     if not key:
         raise RuntimeError("OPENROUTER_API_KEY is not set")
 
-    payload = json.dumps({
-        "model": model or os.environ.get("EMBEDDING_MODEL", DEFAULT_EMBED_MODEL),
-        "input": texts,
-    }).encode()
-
-    req = urllib.request.Request(
+    status, raw = post_json(
         EMBED_URL,
-        data=payload,
-        headers={
-            "Authorization": "Bearer " + key,
-            "Content-Type": "application/json",
+        {
+            "model": model or os.environ.get("EMBEDDING_MODEL", DEFAULT_EMBED_MODEL),
+            "input": texts,
         },
-        method="POST",
+        headers={"Authorization": "Bearer " + key},
+        timeout=timeout,
     )
-    with urllib.request.urlopen(req, timeout=timeout) as res:
-        body = json.loads(res.read())
+    if status != 200:
+        raise RuntimeError("embeddings returned %d: %s" % (status, raw[:300].decode("utf-8", "replace")))
+    body = json.loads(raw)
 
     # Keep OpenRouter's order explicit rather than trusting the response order.
     rows = sorted(body["data"], key=lambda d: d.get("index", 0))

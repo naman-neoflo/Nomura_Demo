@@ -48,6 +48,11 @@ blocked before it is sent and surfaces only as "Failed to fetch".
 
 Ask it an IT question and it answers from the knowledge base.
 
+A greeting or a thank-you is answered conversationally without going near
+retrieval, so "thanks, that worked" is not met with an offer to raise a ticket.
+A message only counts as small talk when every word in it is a pleasantry, so
+"hi my outlook won't open" still goes through retrieval.
+
 **Retrieval** runs two retrievers and fuses them with reciprocal rank fusion:
 
 - **FAISS** over OpenRouter embeddings. `scripts/build_index.py` embeds each
@@ -62,24 +67,29 @@ Ask it an IT question and it answers from the knowledge base.
 
 They keep separate confidence floors, because their scores are on unrelated
 scales; either retriever being sure is enough to answer. Measured by
-`python3 scripts/test_retrieval.py`, BM25 alone:
+`python3 scripts/test_retrieval.py`, with the index built:
 
 ```
-top-1 (used when no LLM key is set): 23/24
+top-1 (used when no LLM key is set): 24/24
 top-3 (what the model receives):     24/24
 out-of-scope correctly declined:     3/3
 ```
 
-Re-run that script once the index exists — it prints the cosine separation
-between in-scope and out-of-scope questions, which is what `VECTOR_FLOOR` in
-`api/_search.py` should be set from. The committed value is a provisional
-guess until it has been measured.
+Fusion is what earns the top-1 score: BM25 alone gets 23/24, missing "connected
+to vpn but can't reach internal sites", which the vector side ranks correctly.
+
+The cosine floor is measured, not guessed — the weakest genuine question scores
+0.438 and the strongest out-of-scope one 0.325, so `VECTOR_FLOOR` sits at 0.38,
+in the middle of that gap.
+
+Re-run the script after changing the knowledge base or the embedding model; it
+reprints the separation so the floors can be re-centred.
 
 **Answering** depends on `OPENROUTER_API_KEY`:
 
 | Key | Behaviour |
 | --- | --- |
-| Set | The model (default `anthropic/claude-opus-5.5` via OpenRouter) writes the answer, grounded in the retrieved articles only. Instructed to reply `NO_ANSWER` rather than improvise. |
+| Set | The model (default `openai/gpt-5.1` via OpenRouter) writes the answer, grounded in the retrieved articles only. Instructed to reply `NO_ANSWER` rather than improvise. |
 | Not set | The matching article's steps are returned verbatim. |
 
 Both paths answer only from the knowledge base. If the model call fails the
@@ -105,7 +115,7 @@ All optional; see `.env.example`. Set them in the Vercel project for production.
 | Variable | Effect when unset |
 | --- | --- |
 | `OPENROUTER_API_KEY` | No vector search and no written answers — BM25 retrieval, knowledge base steps returned verbatim. |
-| `OPENROUTER_MODEL` | Defaults to `anthropic/claude-opus-5.5`. |
+| `OPENROUTER_MODEL` | Defaults to `openai/gpt-5.1`. `openai/gpt-5-mini` is ~5x cheaper and ample for this task. |
 | `EMBEDDING_MODEL` | Defaults to `openai/text-embedding-3-small`. |
 | `BM25_FLOOR` / `VECTOR_FLOOR` | Defaults from `api/_search.py`. |
 | `WEBHOOK_URL` | Falls back to the n8n URL in `api/callback.py`. |

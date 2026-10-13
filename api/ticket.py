@@ -12,11 +12,10 @@ someone their ticket was filed when it was not.
 import json
 import os
 import time
-import urllib.error
-import urllib.request
 from http.server import BaseHTTPRequestHandler
 
 from _http import method_not_allowed, read_json, send_json
+from _net import post_json
 
 TICKET_WEBHOOK = os.environ.get("TICKET_WEBHOOK_URL")
 DEFAULT_ROUTE = {"team": "IT Service Desk", "priority": "P3"}
@@ -43,35 +42,26 @@ class handler(BaseHTTPRequestHandler):
             "priority": escalation.get("priority") or DEFAULT_ROUTE["priority"],
         }
 
-        payload = json.dumps({
-            "source": "it-service-desk-chat",
-            "name": body.get("name"),
-            "contact_number": body.get("contact"),
-            "issue": issue,
-            "kb_article": article.get("title"),
-            "kb_article_id": article.get("id"),
-            "assignment_group": route["team"],
-            "priority": route["priority"],
-            "transcript": (body.get("transcript") or [])[-20:],
-            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        }).encode("utf-8")
-
-        request = urllib.request.Request(
-            TICKET_WEBHOOK,
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-
         try:
-            with urllib.request.urlopen(request, timeout=30) as response:
-                raw = response.read()
-        except urllib.error.HTTPError as exc:
-            print("Ticket webhook returned", exc.code, exc.read()[:300])
-            return send_json(self, 502, {"message": "The ticketing system rejected the request"})
+            status, raw = post_json(TICKET_WEBHOOK, {
+                "source": "it-service-desk-chat",
+                "name": body.get("name"),
+                "contact_number": body.get("contact"),
+                "issue": issue,
+                "kb_article": article.get("title"),
+                "kb_article_id": article.get("id"),
+                "assignment_group": route["team"],
+                "priority": route["priority"],
+                "transcript": (body.get("transcript") or [])[-20:],
+                "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            }, timeout=30)
         except Exception as exc:
             print("Ticket webhook unreachable:", exc)
             return send_json(self, 502, {"message": "Could not reach the ticketing system"})
+
+        if status >= 400:
+            print("Ticket webhook returned", status, raw[:300])
+            return send_json(self, 502, {"message": "The ticketing system rejected the request"})
 
         # Use the reference the ticketing system returns; never fabricate one.
         reference = None

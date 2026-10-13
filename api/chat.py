@@ -13,21 +13,52 @@ than guessing.
 
 import json
 import os
-import urllib.error
-import urllib.request
+import re
 from http.server import BaseHTTPRequestHandler
 
 from _http import method_not_allowed, read_json, send_json
+from _net import post_json
 from _search import index_status, render_article, search
 
 CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
-DEFAULT_MODEL = "anthropic/claude-opus-5.5"
+DEFAULT_MODEL = "openai/gpt-5.1"
 MAX_HISTORY = 10
 
 NO_ANSWER = (
     "I don't have guidance for that in my knowledge base. I can raise a ticket "
     "for you, or arrange a callback from a live IT specialist."
 )
+
+# A greeting or a thank-you is not a failed knowledge base lookup. Without this
+# "thanks, that worked" would be met with an offer to raise a ticket.
+#
+# A message counts as small talk only when *every* word is a pleasantry, so
+# "hi my outlook won't open" still goes through retrieval.
+GREETING_WORDS = {"hi", "hey", "hello", "yo", "morning", "afternoon", "evening", "greetings"}
+CLOSING_WORDS = {
+    "thanks", "thank", "thx", "cheers", "ta", "great", "perfect", "lovely",
+    "brilliant", "ok", "okay", "sorted", "bye", "goodbye", "cya", "nope", "no",
+    "worked", "done", "awesome",
+}
+FILLER_WORDS = {
+    "a", "all", "good", "got", "it", "lot", "mate", "much", "now", "so", "team",
+    "that", "there", "the", "very", "well", "yes", "yeah", "you", "aria", "and",
+}
+
+
+def small_talk_reply(message):
+    """Return a short reply for a purely conversational turn, else None."""
+    words = re.findall(r"[a-z']+", message.lower())
+    if not words or len(words) > 6:
+        return None
+    if not all(w in GREETING_WORDS or w in CLOSING_WORDS or w in FILLER_WORDS for w in words):
+        return None
+    if words[0] in GREETING_WORDS:
+        return "Hello. Describe your IT issue and I'll walk you through the fix."
+    if any(w in CLOSING_WORDS for w in words):
+        return "Glad to help. Is there anything else you need?"
+    return None
+
 
 SYSTEM = """You are Aria, the IT service desk assistant for Nomura, helping an employee over chat.
 
@@ -78,27 +109,27 @@ def ask_model(message, history, hits, api_key):
                    % (build_context(hits), message),
     })
 
-    payload = json.dumps({
-        "model": os.environ.get("OPENROUTER_MODEL", DEFAULT_MODEL),
-        "messages": messages,
-        "max_tokens": 1024,   # chat replies are deliberately short
-        "temperature": 0.2,
-    }).encode("utf-8")
-
-    request = urllib.request.Request(
+    status, raw = post_json(
         CHAT_URL,
-        data=payload,
+        {
+            "model": os.environ.get("OPENROUTER_MODEL", DEFAULT_MODEL),
+            "messages": messages,
+            # The reply is short, but on a reasoning model the budget is shared
+            # with reasoning tokens -- too low and the content comes back empty.
+            "max_tokens": 2000,
+            # Reading three short articles and restating their steps needs no
+            # deep reasoning; low effort keeps the reply fast and cheap.
+            "reasoning": {"effort": "low"},
+        },
         headers={
             "Authorization": "Bearer " + api_key,
-            "Content-Type": "application/json",
-            # OpenRouter attributes traffic with these; both are optional.
             "X-Title": "Nomura IT Service Desk",
         },
-        method="POST",
+        timeout=45,
     )
-
-    with urllib.request.urlopen(request, timeout=45) as response:
-        body = json.loads(response.read())
+    if status != 200:
+        raise RuntimeError("chat returned %d: %s" % (status, raw[:300].decode("utf-8", "replace")))
+    body = json.loads(raw)
 
     choices = body.get("choices") or []
     if not choices:
@@ -128,6 +159,17 @@ class handler(BaseHTTPRequestHandler):
 
         if not message:
             return send_json(self, 400, {"message": "A message is required"})
+
+        chat_reply = small_talk_reply(message)
+        if chat_reply:
+            return send_json(self, 200, {
+                "reply": chat_reply,
+                "answered": True,
+                "escalate": False,
+                "source": "greeting",
+                "article": None,
+                "retrieval": [],
+            })
 
         hits, info = search(message)
 
@@ -165,8 +207,6 @@ class handler(BaseHTTPRequestHandler):
                     "article": None,
                     "retrieval": info["retrievers"],
                 })
-            except urllib.error.HTTPError as exc:
-                print("OpenRouter returned", exc.code, exc.read()[:300])
             except Exception as exc:
                 print("OpenRouter call failed:", exc)
             # Fall through to the knowledge base steps rather than failing.
