@@ -330,10 +330,8 @@
           </div>
 
           <div class="field">
-            <label for="contact">Contact number <span class="req">*</span>
-              <span class="hint">Include the country code — e.g. +91 98765 43210 (India) or +1 212 555 0147 (US)</span>
-            </label>
-            <input id="contact" name="contact" type="tel" required autocomplete="tel" placeholder="+91 98765 43210">
+            <label for="contact">Contact number <span class="req">*</span></label>
+            <input id="contact" name="contact" type="tel" required autocomplete="tel" placeholder="Number with country code">
           </div>
 
           <div class="field">
@@ -453,13 +451,12 @@
     }
 
     // The dialler needs E.164 (+ then digits only), but people type numbers
-    // with spaces, brackets and dashes: "+1 (212) 555-0147", "+91 98765 43210".
+    // with spaces, brackets and dashes: "+65 9123 4567", "+1 (212) 555-0147".
     // Strip the formatting and keep a single leading "+".
     var dial = contact.replace(/[^\d+]/g, "").replace(/(?!^)\+/g, "");
 
     if (!/^\+[1-9]\d{7,14}$/.test(dial)) {
-      setStatus("Please enter a valid number including the country code, "
-              + "e.g. +91 98765 43210 or +1 212 555 0147.", "err");
+      setStatus("Please enter your number with its country code, starting with +.", "err");
       return;
     }
 

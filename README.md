@@ -283,8 +283,9 @@ through as literal text.
 Account Unlock, VPN Not Connecting.
 
 `contact_number` is normalised to E.164 before sending — spaces, brackets and
-dashes are stripped, so `+1 (212) 555-0147` is submitted as `+12125550147`. Any
-country code is accepted, but it must be present.
+dashes are stripped, so `+65 9123 4567` is submitted as `+6591234567`. Any
+country code is accepted, but it must be present. The field deliberately names
+no example countries: listing two read as a whitelist.
 
 ## Notes
 
