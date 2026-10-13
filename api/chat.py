@@ -267,6 +267,61 @@ LIMITS
 - Never name an internal team, a priority code (P1/P2/P3) or an SLA. You do not handle the handoff; if the steps fail, say you will get it to someone who can help and stop there."""
 
 
+DECLINE_SYSTEM = """You are Aria, the IT service desk assistant for Nomura, talking to a colleague over chat.
+
+You have NO information about what they have just asked. You cannot help with it yourself.
+
+Write one or two short sentences that:
+- say plainly that you do not have anything on this, naming what they actually asked about in your own words
+- offer the two ways forward: raising a ticket, or a callback from a specialist
+
+Rules:
+- Never guess at an answer, suggest a fix, name a likely cause or speculate. You have nothing on this.
+- If what they asked is clearly nothing to do with IT, say so plainly rather than implying it might be.
+- No stock openers ("Got it", "Sounds like", "Sorry to hear"), no apologising twice, no emoji, no sign-off.
+- Under 40 words."""
+
+
+def decline_reply(message, history, api_key, profile=None):
+    """Word the "I can't help with this" reply from what was actually asked.
+
+    One canned sentence read the same whether someone asked about annual leave
+    or an IT problem the knowledge base happens not to cover. Falls back to the
+    canned line if there is no key or the call fails -- the decline still has to
+    work when the model does not.
+    """
+    if not api_key:
+        return NO_ANSWER
+
+    messages = [{"role": "system", "content": DECLINE_SYSTEM}]
+    for turn in history[-4:]:
+        if turn.get("role") in ("user", "assistant") and turn.get("content"):
+            messages.append({"role": turn["role"], "content": str(turn["content"])[:1000]})
+    messages.append({"role": "user", "content": message})
+
+    try:
+        status, raw = post_json(
+            CHAT_URL,
+            {
+                "model": os.environ.get("OPENROUTER_MODEL", DEFAULT_MODEL),
+                "messages": messages,
+                "max_tokens": 600,
+                "reasoning": {"effort": "low"},
+            },
+            headers={"Authorization": "Bearer " + api_key,
+                     "X-Title": "Nomura IT Service Desk"},
+            timeout=30,
+        )
+        if status != 200:
+            raise RuntimeError("decline returned %d" % status)
+        text = ((json.loads(raw).get("choices") or [{}])[0]
+                .get("message", {}).get("content") or "").strip()
+        return text or NO_ANSWER
+    except Exception as exc:
+        print("decline wording failed, using the canned line:", exc)
+        return NO_ANSWER
+
+
 def build_context(hits):
     blocks = []
     for i, hit in enumerate(hits, 1):
@@ -447,7 +502,8 @@ class handler(BaseHTTPRequestHandler):
             if active and len(message.split()) <= 6:
                 return reply(escalation_line(active, gave_steps(history)),
                              True, True, "followup", active)
-            return reply(NO_ANSWER, False, True, "none", None, info["retrievers"])
+            return reply(decline_reply(message, history, os.environ.get("OPENROUTER_API_KEY"), profile),
+                         False, True, "none", None, info["retrievers"])
 
         top = hits[0]["article"]
         api_key = os.environ.get("OPENROUTER_API_KEY")
@@ -458,7 +514,8 @@ class handler(BaseHTTPRequestHandler):
                 if written:
                     return reply(written, True, False, "openrouter",
                                  summarise(top), info["retrievers"])
-                return reply(NO_ANSWER, False, True, "openrouter", None, info["retrievers"])
+                return reply(decline_reply(message, history, api_key, profile),
+                             False, True, "openrouter", None, info["retrievers"])
             except Exception as exc:
                 print("OpenRouter call failed:", exc)
             # Fall through to the knowledge base steps rather than failing.

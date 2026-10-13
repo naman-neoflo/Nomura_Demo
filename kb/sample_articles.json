@@ -4,23 +4,44 @@
     {
       "section": "Password & Account",
       "title": "Reset your Nomura password",
-      "keywords": ["password", "reset", "forgot", "change", "credentials", "sign", "login"],
+      "keywords": [
+        "password",
+        "reset",
+        "forgot",
+        "change",
+        "credentials",
+        "sign",
+        "login"
+      ],
       "steps": [
-        "Open the Nomura self-service password portal and choose Forgot password.",
+        "Open the Nomura self-service password portal and choose Forgot password. You can do this from any device with a browser - your phone, a tablet or a colleague's machine - so a locked laptop does not stop you.",
         "Confirm your identity with the authenticator app or a code sent to your registered mobile number.",
         "Choose a new password that meets policy: at least 12 characters with upper and lower case, a number and a symbol, and not one you have used before.",
         "Sign out of Outlook, Teams and the VPN client, then sign back in with the new password so saved credentials update."
       ],
       "notes": [
         "The service desk will never ask you for your password or a verification code.",
-        "If you are off the network you must be connected to the VPN before the new password applies to your laptop."
+        "If you are off the network you must be connected to the VPN before the new password applies to your laptop.",
+        "You do not need to be signed in to your laptop to reset your password."
       ],
-      "escalation": { "when": "Self-service reset fails or the portal is unavailable", "team": "Identity and Access Management", "priority": "P2" }
+      "escalation": {
+        "when": "Self-service reset fails or the portal is unavailable",
+        "team": "Identity and Access Management",
+        "priority": "P2"
+      }
     },
     {
       "section": "Password & Account",
       "title": "Account locked after too many failed sign-ins",
-      "keywords": ["account", "locked", "lockout", "unlock", "blocked", "disabled", "sign"],
+      "keywords": [
+        "account",
+        "locked",
+        "lockout",
+        "unlock",
+        "blocked",
+        "disabled",
+        "sign"
+      ],
       "steps": [
         "Wait 15 minutes. Accounts unlock on their own once the lockout period passes.",
         "Find anything still trying the old password - a phone mail app, a mapped drive, a second laptop - and sign out there first, or it will lock the account again.",
@@ -30,12 +51,23 @@
       "notes": [
         "Repeated lockouts within an hour almost always mean a device is still caching the old password."
       ],
-      "escalation": { "when": "Still locked out after the wait and a password reset", "team": "Identity and Access Management", "priority": "P2" }
+      "escalation": {
+        "when": "Still locked out after the wait and a password reset",
+        "team": "Identity and Access Management",
+        "priority": "P2"
+      }
     },
     {
       "section": "Password & Account",
       "title": "Password expiring soon",
-      "keywords": ["password", "expiring", "expire", "expired", "renew", "change"],
+      "keywords": [
+        "password",
+        "expiring",
+        "expire",
+        "expired",
+        "renew",
+        "change"
+      ],
       "steps": [
         "Change it before it expires rather than after - an expired password locks you out of Outlook and Teams until it is reset.",
         "On the Nomura network or connected to the VPN, press Ctrl + Alt + Delete and choose Change a password.",
@@ -45,7 +77,42 @@
       "notes": [
         "If it has already expired, use the self-service password portal to reset it instead."
       ],
-      "escalation": { "when": "Change a password is greyed out or rejects the new password", "team": "Identity and Access Management", "priority": "P3" }
+      "escalation": {
+        "when": "Change a password is greyed out or rejects the new password",
+        "team": "Identity and Access Management",
+        "priority": "P3"
+      }
+    },
+    {
+      "section": "Password & Account",
+      "title": "Cannot sign in to your laptop at all",
+      "keywords": [
+        "locked",
+        "out",
+        "login",
+        "signin",
+        "password",
+        "laptop",
+        "incorrect",
+        "wrong",
+        "portal",
+        "access"
+      ],
+      "steps": [
+        "Check the basics first: Caps Lock, the keyboard language, and that you are using your Nomura password rather than a personal one.",
+        "Reset your password from another device - the self-service portal works from a phone or tablet browser, so you do not need the laptop to do it.",
+        "Connect the laptop to the Nomura network or the VPN before signing in with the new password, or it will still check against the old one.",
+        "If you have no other device to hand, call the IT service desk from any phone and they can reset it for you."
+      ],
+      "notes": [
+        "A reset done off the network can take a few minutes to reach the laptop.",
+        "The service desk will never ask you for your password or a verification code."
+      ],
+      "escalation": {
+        "when": "No other device available, or the reset does not let you in",
+        "team": "Identity and Access Management",
+        "priority": "P1"
+      }
     }
   ]
 }

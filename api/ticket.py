@@ -55,21 +55,79 @@ def auth_header():
     return "Basic " + token
 
 
+CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
+DEFAULT_MODEL = "openai/gpt-5.1"
+
+HANDOVER_SYSTEM = """You are writing the description of an IT support ticket for the agent who will pick it up. You are given the chat between an employee and the service desk assistant.
+
+Write a brief handover in exactly this shape and nothing else:
+
+Issue: <one sentence, what is actually wrong, in plain language>
+Already tried: <the steps the employee actually attempted, as short bullet lines starting with "- "; write "Nothing yet." if none>
+Current state: <one sentence, where it stands and why it needs a person>
+
+Rules:
+- State only what the chat shows. Never invent symptoms, causes, or steps that were not tried.
+- Do not reproduce the conversation. This is a summary, not a transcript.
+- No greeting, no sign-off, no team names or priority codes. Under 120 words."""
+
+
+def transcript_text(transcript):
+    lines = []
+    for turn in (transcript or [])[-24:]:
+        who = "Employee" if turn.get("role") == "user" else "Assistant"
+        lines.append("%s: %s" % (who, str(turn.get("content") or "").strip()))
+    return "\n".join(lines)
+
+
+def handover(body, api_key):
+    """Summarise the conversation for the agent picking up the ticket.
+
+    The whole transcript used to go into the description, which buried the one
+    thing an agent needs -- what is wrong and what has already been ruled out --
+    under the back and forth that produced it.
+    """
+    transcript = transcript_text(body.get("transcript"))
+    if not transcript:
+        return None
+    if not api_key:
+        return None
+
+    try:
+        status, raw = post_json(
+            CHAT_URL,
+            {
+                "model": os.environ.get("OPENROUTER_MODEL", DEFAULT_MODEL),
+                "messages": [
+                    {"role": "system", "content": HANDOVER_SYSTEM},
+                    {"role": "user", "content": transcript},
+                ],
+                "max_tokens": 900,
+                "reasoning": {"effort": "low"},
+            },
+            headers={"Authorization": "Bearer " + api_key,
+                     "X-Title": "Nomura IT Service Desk"},
+            timeout=40,
+        )
+        if status != 200:
+            raise RuntimeError("handover returned %d" % status)
+        text = ((json.loads(raw).get("choices") or [{}])[0]
+                .get("message", {}).get("content") or "").strip()
+        return text or None
+    except Exception as exc:
+        print("handover summary failed, falling back to the raw issue:", exc)
+        return None
+
+
 def describe(body, article, route):
-    """The ticket body. Everything the agent needs to pick it up cold."""
-    lines = [body["issue"], ""]
+    """The ticket body: a summary of the conversation, not the conversation."""
+    summary = handover(body, os.environ.get("OPENROUTER_API_KEY"))
+
+    lines = [summary] if summary else ["Issue: " + body["issue"]]
+    lines.append("")
     if article.get("title"):
         lines.append("Knowledge base article used: %s" % article["title"])
-    lines.append("Suggested assignment: %s (%s)" % (route["team"], route["priority"]))
     lines.append("Raised from: the IT Service Desk chat assistant")
-
-    transcript = body.get("transcript") or []
-    if transcript:
-        lines += ["", "Conversation:"]
-        for turn in transcript[-20:]:
-            who = "Employee" if turn.get("role") == "user" else "Assistant"
-            lines.append("%s: %s" % (who, str(turn.get("content") or "").strip()))
-
     return "\n".join(lines)
 
 

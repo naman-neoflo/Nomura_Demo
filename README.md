@@ -63,6 +63,7 @@ chat feel robotic, so the route reads the turn first:
 | "Don't raise a ticket, I want it fixed here" | Does not offer the ticket again. Says plainly that the steps given are all there is, and asks which one failed. |
 | "Yes, raise a ticket" / "can I speak to someone" | Agrees, and names the team and priority the issue routes to. |
 | Anything else | Retrieval. |
+| Nothing found | The decline is written from the conversation, naming what was actually asked, rather than one canned line for everything. |
 
 A turn only counts as small talk when every word in it is a pleasantry, so
 "hi my outlook won't open" still goes through retrieval.
@@ -141,7 +142,10 @@ answer — offers the two escalation routes:
   defaulting to IT Service Desk / P3. `P1/P2/P3` maps onto Freshdesk's
   `4/3/2`, and the conversation goes into the ticket description.
   The requester is the email taken at the start of the chat, which matches an
-  existing Freshdesk contact instead of creating a duplicate.
+  existing Freshdesk contact instead of creating a duplicate. The description is
+  a generated handover — issue, what was already tried, where it stands — not
+  the transcript, which buried those three things under the back and forth that
+  produced them.
 - **Request a callback** → closes the chat, preselects the matching reason in
   the form and focuses it.
 
@@ -171,7 +175,7 @@ Three sources feed `kb/kb.json`:
 | `Nomura_IT_Knowledge_Base.pdf` | 26 | Real. Email, Teams, VPN, network, hardware, access, printers. |
 | …its routing and SLA tables | 2 | **Internal.** Never retrieved — see below. |
 | `software_catalog.json` | 2 | The 15 approved packages from the voice agent prompt. |
-| `sample_articles.json` | 3 | **Sample.** Password reset, lockout, expiry. |
+| `sample_articles.json` | 4 | **Sample.** Password reset, lockout, expiry, locked out of the laptop. |
 
 The PDF covers general IT faults but not identity or software, yet both are
 callback reasons the voice agent handles — so the chat used to deny "I want to
