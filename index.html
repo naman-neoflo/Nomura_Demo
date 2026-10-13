@@ -26,12 +26,20 @@
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body {
+    /* Sticky footer. Without this the page simply ends where the content does,
+       and on a tall window the body's grey fills everything below the footer,
+       which reads as the page having fallen over. */
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
     background: var(--page);
     color: var(--ink);
     font: 14px/1.6 Arial, "Helvetica Neue", Helvetica, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
   .wrap { max-width: 1000px; margin: 0 auto; padding: 0 20px; }
+  main { flex: 1 0 auto; }   /* takes up the slack so the footer sits at the bottom */
+  footer { flex: none; }
 
   /* ---------- header ---------- */
   .masthead { position: relative; background: var(--red); overflow: hidden; }
