@@ -17,6 +17,7 @@ loss to tune away.
 
 import json
 import os
+import re
 import sys
 import time
 
@@ -38,11 +39,19 @@ def passage(article):
     The title carries most of the signal, so it leads; the steps follow for the
     vocabulary a user is likely to echo ("spooler", "Credential Manager").
     """
-    parts = [article["title"]]
+    # Same reason the lexical side drops it: every article is a Nomura article,
+    # so the brand pulls unrelated questions ("Nomura share price") close to
+    # whichever article happens to name it.
+    def debrand(text):
+        return re.sub(r"\bNomura\s*", "", text).strip()
+
+    parts = [debrand(article["title"])]
     if article.get("section"):
         parts.append("Category: " + article["section"])
-    parts.extend(article["steps"])
-    parts.extend(article.get("notes", []))
+    if article.get("keywords"):
+        parts.append("Also known as: " + ", ".join(article["keywords"]))
+    parts.extend(debrand(x) for x in article["steps"])
+    parts.extend(debrand(x) for x in article.get("notes", []))
     return "\n".join(parts)
 
 

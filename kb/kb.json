@@ -460,6 +460,182 @@
    "text": "Printers Print Jobs Stuck in Queue Open print queue → cancel all pending jobs Restart Print Spooler service (see above) Delete files in C:\\Windows\\System32\\spool\\PRINTERS Restart printer and try again"
   },
   {
+   "section": "Password & Account",
+   "title": "Reset your Nomura password",
+   "keywords": [
+    "password",
+    "reset",
+    "forgot",
+    "change",
+    "credentials",
+    "sign",
+    "login"
+   ],
+   "steps": [
+    "Open the Nomura self-service password portal and choose Forgot password.",
+    "Confirm your identity with the authenticator app or a code sent to your registered mobile number.",
+    "Choose a new password that meets policy: at least 12 characters with upper and lower case, a number and a symbol, and not one you have used before.",
+    "Sign out of Outlook, Teams and the VPN client, then sign back in with the new password so saved credentials update."
+   ],
+   "notes": [
+    "The service desk will never ask you for your password or a verification code.",
+    "If you are off the network you must be connected to the VPN before the new password applies to your laptop."
+   ],
+   "escalation": {
+    "when": "Self-service reset fails or the portal is unavailable",
+    "team": "Identity and Access Management",
+    "priority": "P2"
+   },
+   "id": "kb-027",
+   "text": "Password & Account Reset your Nomura password password reset forgot change credentials sign login Open the Nomura self-service password portal and choose Forgot password. Confirm your identity with the authenticator app or a code sent to your registered mobile number. Choose a new password that meets policy: at least 12 characters with upper and lower case, a number and a symbol, and not one you have used before. Sign out of Outlook, Teams and the VPN client, then sign back in with the new password so saved credentials update. The service desk will never ask you for your password or a verification code. If you are off the network you must be connected to the VPN before the new password applies to your laptop."
+  },
+  {
+   "section": "Password & Account",
+   "title": "Account locked after too many failed sign-ins",
+   "keywords": [
+    "account",
+    "locked",
+    "lockout",
+    "unlock",
+    "blocked",
+    "disabled",
+    "sign"
+   ],
+   "steps": [
+    "Wait 15 minutes. Accounts unlock on their own once the lockout period passes.",
+    "Find anything still trying the old password - a phone mail app, a mapped drive, a second laptop - and sign out there first, or it will lock the account again.",
+    "Once the lockout clears, sign in again with your current password.",
+    "If you no longer know the password, reset it through the self-service portal instead."
+   ],
+   "notes": [
+    "Repeated lockouts within an hour almost always mean a device is still caching the old password."
+   ],
+   "escalation": {
+    "when": "Still locked out after the wait and a password reset",
+    "team": "Identity and Access Management",
+    "priority": "P2"
+   },
+   "id": "kb-028",
+   "text": "Password & Account Account locked after too many failed sign-ins account locked lockout unlock blocked disabled sign Wait 15 minutes. Accounts unlock on their own once the lockout period passes. Find anything still trying the old password - a phone mail app, a mapped drive, a second laptop - and sign out there first, or it will lock the account again. Once the lockout clears, sign in again with your current password. If you no longer know the password, reset it through the self-service portal instead. Repeated lockouts within an hour almost always mean a device is still caching the old password."
+  },
+  {
+   "section": "Password & Account",
+   "title": "Password expiring soon",
+   "keywords": [
+    "password",
+    "expiring",
+    "expire",
+    "expired",
+    "renew",
+    "change"
+   ],
+   "steps": [
+    "Change it before it expires rather than after - an expired password locks you out of Outlook and Teams until it is reset.",
+    "On the Nomura network or connected to the VPN, press Ctrl + Alt + Delete and choose Change a password.",
+    "Enter your current password, then the new one twice.",
+    "Sign out and back in so Outlook, Teams and the VPN client pick up the change."
+   ],
+   "notes": [
+    "If it has already expired, use the self-service password portal to reset it instead."
+   ],
+   "escalation": {
+    "when": "Change a password is greyed out or rejects the new password",
+    "team": "Identity and Access Management",
+    "priority": "P3"
+   },
+   "id": "kb-029",
+   "text": "Password & Account Password expiring soon password expiring expire expired renew change Change it before it expires rather than after - an expired password locks you out of Outlook and Teams until it is reset. On the Nomura network or connected to the VPN, press Ctrl + Alt + Delete and choose Change a password. Enter your current password, then the new one twice. Sign out and back in so Outlook, Teams and the VPN client pick up the change. If it has already expired, use the self-service password portal to reset it instead."
+  },
+  {
+   "section": "Software Installation",
+   "title": "Install approved software on your laptop",
+   "steps": [
+    "Check the software you need is on the approved list below. Only approved software can be installed.",
+    "Tell the service desk which title and version you need - several products are available in more than one version.",
+    "The service desk triggers the installation remotely. It takes about 15 minutes.",
+    "Keep the laptop switched on and connected to the Nomura network until it finishes."
+   ],
+   "keywords": [
+    "install",
+    "installation",
+    "software",
+    "application",
+    "licence",
+    "Microsoft",
+    "Excel",
+    "365",
+    "Microsoft",
+    "Excel",
+    "2019",
+    "Microsoft",
+    "Excel",
+    "2016",
+    "Microsoft",
+    "Office",
+    "365",
+    "Microsoft",
+    "Office",
+    "2019",
+    "Microsoft",
+    "Teams",
+    "Zoom",
+    "5.x",
+    "Slack",
+    "Adobe",
+    "Acrobat",
+    "2023",
+    "Nomura",
+    "VPN",
+    "Client",
+    "Google",
+    "Chrome",
+    "Mozilla",
+    "Firefox",
+    "AutoCAD",
+    "2024",
+    "Tableau",
+    "2023",
+    "Power",
+    "BI",
+    "Desktop"
+   ],
+   "notes": [
+    "Approved software: Microsoft Excel 365 - Cloud based, co-authoring supported (PKG001); Microsoft Excel 2019 - Standalone, no cloud features (PKG002); Microsoft Excel 2016 - Legacy version (PKG003); Microsoft Office 365 - Full suite: Word, Excel, PowerPoint, Outlook (PKG004); Microsoft Office 2019 - Full suite, standalone (PKG005); Microsoft Teams - Video calls and messaging (PKG006); Zoom 5.x - Video conferencing (PKG007); Slack - Team messaging (PKG008); Adobe Acrobat 2023 - PDF reader and editor (PKG009); Nomura VPN Client - Corporate VPN for remote work (PKG010); Google Chrome - Web browser (PKG011); Mozilla Firefox - Web browser (PKG012); AutoCAD 2024 - CAD design software (PKG013); Tableau 2023 - Data visualization (PKG014); Power BI Desktop - Microsoft business intelligence (PKG015)"
+   ],
+   "escalation": {
+    "when": "Installation needed",
+    "team": "IT Service Desk",
+    "priority": "P3"
+   },
+   "id": "kb-030",
+   "text": "Software Installation Install approved software on your laptop install installation software application licence Microsoft Excel 365 Microsoft Excel 2019 Microsoft Excel 2016 Microsoft Office 365 Microsoft Office 2019 Microsoft Teams Zoom 5.x Slack Adobe Acrobat 2023 Nomura VPN Client Google Chrome Mozilla Firefox AutoCAD 2024 Tableau 2023 Power BI Desktop Check the software you need is on the approved list below. Only approved software can be installed. Tell the service desk which title and version you need - several products are available in more than one version. The service desk triggers the installation remotely. It takes about 15 minutes. Keep the laptop switched on and connected to the Nomura network until it finishes. Approved software: Microsoft Excel 365 - Cloud based, co-authoring supported (PKG001); Microsoft Excel 2019 - Standalone, no cloud features (PKG002); Microsoft Excel 2016 - Legacy version (PKG003); Microsoft Office 365 - Full suite: Word, Excel, PowerPoint, Outlook (PKG004); Microsoft Office 2019 - Full suite, standalone (PKG005); Microsoft Teams - Video calls and messaging (PKG006); Zoom 5.x - Video conferencing (PKG007); Slack - Team messaging (PKG008); Adobe Acrobat 2023 - PDF reader and editor (PKG009); Nomura VPN Client - Corporate VPN for remote work (PKG010); Google Chrome - Web browser (PKG011); Mozilla Firefox - Web browser (PKG012); AutoCAD 2024 - CAD design software (PKG013); Tableau 2023 - Data visualization (PKG014); Power BI Desktop - Microsoft business intelligence (PKG015)"
+  },
+  {
+   "section": "Software Installation",
+   "title": "Software you need is not on the approved list",
+   "steps": [
+    "Check the approved list first - the title may be there under a different name or version.",
+    "If it is genuinely not listed, it cannot be installed without approval.",
+    "Raise a request so a specialist can review whether it can be approved for your role."
+   ],
+   "keywords": [
+    "install",
+    "software",
+    "approved",
+    "catalogue",
+    "unapproved",
+    "application"
+   ],
+   "notes": [],
+   "escalation": {
+    "when": "Software not in the approved catalogue",
+    "team": "IT Service Desk",
+    "priority": "P3"
+   },
+   "id": "kb-031",
+   "text": "Software Installation Software you need is not on the approved list install software approved catalogue unapproved application Check the approved list first - the title may be there under a different name or version. If it is genuinely not listed, it cannot be installed without approval. Raise a request so a specialist can review whether it can be approved for your role."
+  },
+  {
    "section": "Ticket Priority & SLA",
    "title": "Ticket priority levels and response times",
    "steps": [
@@ -469,7 +645,7 @@
    ],
    "notes": [],
    "escalation": null,
-   "id": "kb-027",
+   "id": "kb-032",
    "text": "Ticket Priority & SLA Ticket priority levels and response times P1 - Employee completely cannot work - SLA 1 hour P2 - Major disruption, partially working - SLA 4 hours P3 - Minor issue, workaround available - SLA next business day"
   },
   {
@@ -484,7 +660,7 @@
    ],
    "notes": [],
    "escalation": null,
-   "id": "kb-028",
+   "id": "kb-033",
    "text": "Ticket Priority & SLA Which team handles which issue Email, Outlook, Teams, Slack - Messaging Team VPN, WiFi, Internet, Network - Network Team Laptop, Printer, Monitor, Hardware - End User Computing Access, Permissions, MFA, Accounts - Identity and Access Management Unknown or general IT issues - IT Service Desk"
   }
  ]

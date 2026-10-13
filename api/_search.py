@@ -51,13 +51,15 @@ INDEX_META = os.path.join(ROOT, "kb", "kb_index.json")
 EMBED_URL = "https://openrouter.ai/api/v1/embeddings"
 DEFAULT_EMBED_MODEL = "openai/text-embedding-3-small"
 
-# Calibrated in scripts/test_retrieval.py. The weakest genuine question scores
-# 6.2 on BM25; the best out-of-scope one scores 3.0.
-BM25_FLOOR = float(os.environ.get("BM25_FLOOR", "4.5"))
-# Cosine floor, measured in scripts/test_retrieval.py against the built index:
-# the weakest genuine question scores 0.438, the strongest out-of-scope one
-# 0.325. 0.38 sits in the middle of that gap.
-VECTOR_FLOOR = float(os.environ.get("VECTOR_FLOOR", "0.38"))
+# Both floors are measured, not guessed: scripts/test_retrieval.py prints the
+# gap between the weakest genuine question and the strongest out-of-scope one on
+# each signal, and each floor sits in the middle of its own gap. Re-run it after
+# changing the knowledge base -- adding articles moves both.
+#
+#   BM25:   in-scope from 5.92, out-of-scope to 5.09
+#   Cosine: in-scope from 0.315, out-of-scope to 0.255
+BM25_FLOOR = float(os.environ.get("BM25_FLOOR", "5.5"))
+VECTOR_FLOOR = float(os.environ.get("VECTOR_FLOOR", "0.285"))
 
 RRF_K = 60  # reciprocal rank fusion constant
 
@@ -74,7 +76,10 @@ STOPWORDS = set((
     "a an the and or but if then than that this these those is are was were be been being "
     "do does did doing have has had having i me my we our you your it its they them to of "
     "in on at by for with about into over after before from up down out so no not can cant "
-    "cannot will would should could may might just now get getting got im ive am"
+    "cannot will would should could may might just now get getting got im ive am "
+    # The company name is in titles across the corpus, so it discriminates
+    # nothing -- but it will match any question that merely mentions Nomura.
+    "nomura"
 ).split())
 
 # Helpdesk vocabulary the user's own words rarely match on.
@@ -130,8 +135,11 @@ def _build_bm25():
     docs = []
     for article in ARTICLES:
         # Repeating title and section is how they get their weight.
+        # Keywords carry title-level weight: they exist so a two-word query
+        # ("install zoom") has something strong to match against.
         weighted = " ".join(
             [article["title"]] * 3
+            + article.get("keywords", []) * 3
             + [article.get("section") or ""] * 2
             + article["steps"]
             + article.get("notes", [])
@@ -327,6 +335,42 @@ def search(query, limit=3):
         "top_lexical": top_lexical,
         "confident": confident,
     }
+
+
+# The distinctive words the knowledge base is actually about, taken from the
+# article titles and sections. Used to tell "email is not working" (names a
+# topic) from "no same issue" (names nothing) -- the second is a follow-up, and
+# any article it happens to score against is noise.
+TOPIC_TERMS = frozenset(
+    t for article in ARTICLES
+    for t in _tokenize("%s %s %s" % (article["title"], article.get("section") or "",
+                                     " ".join(article.get("keywords", []))))
+    if len(t) > 2
+) - {"not", "work", "cannot", "issue", "problem", "your", "keep", "stuck", "access"}
+
+
+def mentions_topic(text):
+    """Does this message name something the knowledge base covers?"""
+    return any(t in TOPIC_TERMS for t in _tokenize(text))
+
+
+# A request to install something is a category the knowledge base answers even
+# when it cannot match the product -- an unapproved title should be told it is
+# unapproved, not met with "I have no steps for that". Deliberately narrow: it
+# requires an install word, so "I need help" cannot trigger it.
+INSTALL_RE = re.compile(
+    r"\b(install|installs|installing|installed|installation|download|downloaded"
+    r"|licence|license|software|application)\b", re.I)
+
+
+def install_intent(text):
+    return bool(INSTALL_RE.search(text or ""))
+
+
+def software_articles():
+    """The software installation articles, in catalogue-first order."""
+    found = [a for a in ARTICLES if a.get("section") == "Software Installation"]
+    return sorted(found, key=lambda a: "not on the approved" in a["title"])
 
 
 def render_article(article):

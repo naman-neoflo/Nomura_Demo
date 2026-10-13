@@ -44,6 +44,15 @@ CASES = [
     ("printer says offline", "Cannot Print — Printer Offline"),
     ("print jobs are stuck", "Print Jobs Stuck in Queue"),
     ("what is a p1 ticket", "Ticket priority levels and response times"),
+    # Software installation and identity - not in the PDF, added from
+    # kb/software_catalog.json and kb/sample_articles.json.
+    ("i want to install software in my laptop", "Install approved software on your laptop"),
+    ("install zoom", "Install approved software on your laptop"),
+    ("can I get tableau installed", "Install approved software on your laptop"),
+    ("i forgot my password", "Reset your Nomura password"),
+    ("how do I reset my password", "Reset your Nomura password"),
+    ("my account is locked", "Account locked after too many failed sign-ins"),
+    ("my password is expiring soon", "Password expiring soon"),
     # Out of scope - should be declined.
     ("how do I book annual leave", None),
     ("what is the share price of nomura", None),
@@ -60,7 +69,7 @@ def main():
     print()
 
     top1 = top3 = in_scope = out_ok = out_total = 0
-    in_vec, out_vec = [], []
+    in_vec, out_vec, in_lex, out_lex = [], [], [], []
 
     for question, expected in CASES:
         hits, info = _search.search(question)
@@ -77,6 +86,7 @@ def main():
             out_ok += ok
             if vec is not None:
                 out_vec.append(vec)
+            out_lex.append(lex or 0)
             print("%s  %s  [out of scope] %s" % ("ok  " if ok else "FAIL", detail, question))
             if not ok:
                 print("        answered with: %s" % answered)
@@ -85,6 +95,7 @@ def main():
         in_scope += 1
         if vec is not None:
             in_vec.append(vec)
+        in_lex.append(lex or 0)
         hit1 = answered == expected
         hit3 = info["confident"] and any(h["article"]["title"] == expected for h in hits)
         top1 += hit1
@@ -99,15 +110,23 @@ def main():
     print("out-of-scope correctly declined:     %d/%d" % (out_ok, out_total))
     print("floors: bm25 %.1f, cosine %.2f" % (_search.BM25_FLOOR, _search.VECTOR_FLOOR))
 
-    if in_vec and out_vec:
+    def separation(label, inside, outside, floor):
+        if not inside or not outside:
+            return
+        lo, hi = min(inside), max(outside)
         print()
-        print("cosine separation (set VECTOR_FLOOR between these):")
-        print("  weakest in-scope question:    %.3f" % min(in_vec))
-        print("  strongest out-of-scope one:   %.3f" % max(out_vec))
-        if min(in_vec) <= max(out_vec):
-            print("  NOTE: these overlap, so no single cosine floor separates them.")
-            print("  BM25 is carrying the out-of-scope rejections; that is what the")
-            print("  two independent floors in _search.py are for.")
+        print("%s separation:" % label)
+        print("  weakest in-scope question:  %.3f" % lo)
+        print("  strongest out-of-scope one: %.3f" % hi)
+        if lo > hi:
+            print("  -> a floor of %.3f sits mid-gap (currently %.3f)" % ((lo + hi) / 2, floor))
+        else:
+            print("  NOTE: these overlap, so no single floor separates them on this")
+            print("  signal alone. The other retriever has to carry the rejection;")
+            print("  that is what the two independent floors in _search.py are for.")
+
+    separation("BM25", in_lex, out_lex, _search.BM25_FLOOR)
+    separation("Cosine", in_vec, out_vec, _search.VECTOR_FLOOR)
 
     ok = top3 == in_scope and out_ok == out_total
     print("\n%s" % ("PASS" if ok else "FAIL"))

@@ -17,12 +17,15 @@ A single-page IT service desk, styled to Nomura's visual identity. Two ways in:
 | `api/ticket.py` | Raises a ticket, when a ticketing webhook is configured. |
 | `api/_search.py` | FAISS vector search fused with BM25. |
 | `kb/Nomura_IT_Knowledge_Base.pdf` | Source knowledge base. |
-| `kb/kb.json` | Generated. The parsed articles. |
+| `kb/software_catalog.json` | Approved software list, from the voice agent prompt. |
+| `kb/sample_articles.json` | **Sample** password/account articles. Not Nomura procedure. |
+| `kb/kb.json` | Generated. All articles, from all three sources. |
 | `kb/kb.faiss` | Generated. The vector index. Not in the repo until built. |
 | `kb/kb_index.json` | Generated. Row order and the embedding model used. |
 | `scripts/build_kb.py` | Parses the PDF into `kb/kb.json`. |
 | `scripts/build_index.py` | Embeds the articles and builds the FAISS index. |
 | `scripts/test_retrieval.py` | Retrieval accuracy check and floor calibration. |
+| `scripts/test_conversation.py` | How a turn is read: greeting, follow-up, new topic. |
 | `dev_server.py` | Local server. Mounts the same handlers Vercel runs. |
 
 Everything server-side is Python, because FAISS is a Python library and the
@@ -87,21 +90,24 @@ three-word "no it didn't work" know which steps it refers to.
   "spooler", "ipconfig".
 
 They keep separate confidence floors, because their scores are on unrelated
-scales; either retriever being sure is enough to answer. Measured by
-`python3 scripts/test_retrieval.py`, with the index built:
+scales; either retriever being sure is enough to answer. Measured by `python3 scripts/test_retrieval.py`:
 
 ```
-top-1 (used when no LLM key is set): 24/24
-top-3 (what the model receives):     24/24
+top-1 (used when no LLM key is set): 31/31
+top-3 (what the model receives):     31/31
 out-of-scope correctly declined:     3/3
 ```
 
-Fusion is what earns the top-1 score: BM25 alone gets 23/24, missing "connected
-to vpn but can't reach internal sites", which the vector side ranks correctly.
+Both floors are measured, not guessed. The test prints the gap between the
+weakest genuine question and the strongest out-of-scope one on each signal, and
+each floor sits mid-gap. **Re-run it after changing the knowledge base** —
+adding articles moves both, and the floors that held at 28 articles let two
+out-of-scope questions through at 33.
 
-The cosine floor is measured, not guessed — the weakest genuine question scores
-0.438 and the strongest out-of-scope one 0.325, so `VECTOR_FLOOR` sits at 0.38,
-in the middle of that gap.
+The company name is stripped from both retrievers. Every article is a Nomura
+article, so the token separates nothing while matching any question that merely
+says "Nomura" — it scored "what is the share price of nomura" at 0.449 cosine
+against "Reset your Nomura password".
 
 Re-run the script after changing the knowledge base or the embedding model; it
 reprints the separation so the floors can be re-centred.
@@ -142,20 +148,41 @@ All optional; see `.env.example`. Set them in the Vercel project for production.
 | `WEBHOOK_URL` | Falls back to the n8n URL in `api/callback.py`. |
 | `TICKET_WEBHOOK_URL` | "Raise a ticket" reports that ticketing is not connected. It does not invent a reference number. |
 
+## What the knowledge base covers
+
+Three sources feed `kb/kb.json`:
+
+| Source | Articles | Status |
+| --- | --- | --- |
+| `Nomura_IT_Knowledge_Base.pdf` | 26 | Real. Email, Teams, VPN, network, hardware, access, printers. |
+| `software_catalog.json` | 2 | The 15 approved packages from the voice agent prompt. |
+| `sample_articles.json` | 3 | **Sample.** Password reset, lockout, expiry. |
+
+The PDF covers general IT faults but not identity or software, yet both are
+callback reasons the voice agent handles — so the chat used to deny "I want to
+install software" and "I forgot my password" outright. The two JSON files fill
+those gaps and are meant to be edited.
+
+**`sample_articles.json` is placeholder content**, written from common corporate
+IT practice, not from Nomura procedure. The portal names, the 15-minute lockout
+and the password policy are all invented. Replace them before anyone relies on
+them.
+
 ## Rebuilding the knowledge base and index
 
 ```bash
 pip3 install -r requirements.txt pdfplumber
 
-python3 scripts/build_kb.py                 # kb/*.pdf -> kb/kb.json
+python3 scripts/build_kb.py                 # all three sources -> kb/kb.json
 export OPENROUTER_API_KEY=sk-or-...
 python3 scripts/build_index.py              # kb/kb.json -> kb/kb.faiss
-python3 scripts/test_retrieval.py           # check accuracy, calibrate floors
+python3 scripts/test_retrieval.py           # accuracy + recalibrate the floors
+python3 scripts/test_conversation.py        # turn handling
 ```
 
 **Commit `kb/kb.faiss` and `kb/kb_index.json`.** They are build artefacts, but
 Vercel has no key at build time, so the deployed function reads them from the
-repo. They are small — 28 vectors is about 170 KB at 1536 dimensions.
+repo. They are small — 33 vectors is about 200 KB at 1536 dimensions.
 
 The PDF parser reads the arrow glyph, which extracts as the characters `fi`.
 Only a standalone `fi` is an arrow — replacing every occurrence corrupts

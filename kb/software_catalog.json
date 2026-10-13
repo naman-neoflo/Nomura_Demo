@@ -1,0 +1,23 @@
+{
+  "_comment": "Approved software catalogue, from the Aria voice agent prompt. The knowledge base PDF does not cover software installation, so these entries are built into the index from here. Edit this file and re-run scripts/build_kb.py to change what the chat offers.",
+  "assignment_group": "IT Service Desk",
+  "priority": "P3",
+  "install_minutes": 15,
+  "packages": [
+    { "id": "PKG001", "name": "Microsoft Excel 365",  "note": "Cloud based, co-authoring supported" },
+    { "id": "PKG002", "name": "Microsoft Excel 2019", "note": "Standalone, no cloud features" },
+    { "id": "PKG003", "name": "Microsoft Excel 2016", "note": "Legacy version" },
+    { "id": "PKG004", "name": "Microsoft Office 365", "note": "Full suite: Word, Excel, PowerPoint, Outlook" },
+    { "id": "PKG005", "name": "Microsoft Office 2019","note": "Full suite, standalone" },
+    { "id": "PKG006", "name": "Microsoft Teams",      "note": "Video calls and messaging" },
+    { "id": "PKG007", "name": "Zoom 5.x",             "note": "Video conferencing" },
+    { "id": "PKG008", "name": "Slack",                "note": "Team messaging" },
+    { "id": "PKG009", "name": "Adobe Acrobat 2023",   "note": "PDF reader and editor" },
+    { "id": "PKG010", "name": "Nomura VPN Client",    "note": "Corporate VPN for remote work" },
+    { "id": "PKG011", "name": "Google Chrome",        "note": "Web browser" },
+    { "id": "PKG012", "name": "Mozilla Firefox",      "note": "Web browser" },
+    { "id": "PKG013", "name": "AutoCAD 2024",         "note": "CAD design software" },
+    { "id": "PKG014", "name": "Tableau 2023",         "note": "Data visualization" },
+    { "id": "PKG015", "name": "Power BI Desktop",     "note": "Microsoft business intelligence" }
+  ]
+}

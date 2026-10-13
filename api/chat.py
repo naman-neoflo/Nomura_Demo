@@ -25,7 +25,8 @@ from http.server import BaseHTTPRequestHandler
 
 from _http import method_not_allowed, read_json, send_json
 from _net import post_json
-from _search import index_status, render_article, search
+from _search import (index_status, install_intent, mentions_topic,
+                     render_article, search, software_articles)
 
 CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_MODEL = "openai/gpt-5.1"
@@ -330,10 +331,26 @@ class handler(BaseHTTPRequestHandler):
         # "It didn't work" ends the steps we already gave -- but only when it is
         # still about the same thing. "Email is not working" after a laptop
         # question is a new problem, and escalating that to the laptop team is
-        # worse than not recognising the phrase at all. Retrieval decides.
-        if outcome == "failed" and (not info["confident"] or same_topic):
+        # worse than not recognising the phrase at all.
+        #
+        # A failure report that names nothing the knowledge base covers ("no
+        # same issue") cannot be a topic switch, whatever it scores against:
+        # three common words will always match some article, and that match is
+        # noise, not a question.
+        if outcome == "failed" and (
+            not mentions_topic(message) or not info["confident"] or same_topic
+        ):
             return reply(escalation_line(active, gave_steps(history)),
                          True, True, "followup", active)
+
+        # Someone asking to install something has asked a question we answer,
+        # even when the product is not one we recognise. Hand the model the
+        # catalogue so it can say what is approved and what is not, rather than
+        # denying a request that is squarely in scope.
+        if not info["confident"] and install_intent(message):
+            hits = [{"article": a, "score": 0.0, "vector": None, "lexical": None}
+                    for a in software_articles()]
+            info = dict(info, confident=bool(hits))
 
         if not info["confident"] or not hits:
             # Short, unmatched, and mid-conversation: far likelier to be a reply
