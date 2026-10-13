@@ -228,6 +228,13 @@
 
   .cw-note { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
 
+  .cw-ticket-form { margin-top: 12px; }
+  .cw-ticket-form p { margin: 0 0 10px; font-size: 12.5px; font-weight: 700; color: #333; }
+  .cw-ticket-form label { font-size: 12px; margin-bottom: 4px; }
+  .cw-ticket-form input { height: 36px; font-size: 13px; margin-bottom: 10px; }
+  .cw-ticket-form button { width: 100%; }
+  .cw-ticket-form .cw-note { color: var(--err-text); }
+
   .cw-typing { display: inline-flex; gap: 4px; padding: 3px 0; }
   .cw-typing i {
     width: 6px; height: 6px; background: #b0b0b0; border-radius: 50%;
@@ -631,14 +638,65 @@
     return el;
   }
 
+  // Freshdesk needs a requester, and the chat never asked who it is talking to.
+  // Reuse whatever is already typed into the callback form, and ask inline for
+  // anything missing rather than bouncing them out of the conversation.
   function raiseTicket(box, article) {
-    var pending = note(box, "Raising that now…");
+    var nameField = document.getElementById("name");
+    var contactField = document.getElementById("contact");
+    var name = nameField ? nameField.value.trim() : "";
+    var contact = contactField ? contactField.value.trim() : "";
+
+    if (name && contact) {
+      submitTicket(box, article, name, contact);
+      return;
+    }
+
+    var form = document.createElement("form");
+    form.className = "cw-ticket-form";
+    form.innerHTML =
+      '<p>Who should the ticket be raised for?</p>' +
+      '<label for="cwTktName">Name</label>' +
+      '<input id="cwTktName" type="text" autocomplete="name" placeholder="Your full name">' +
+      '<label for="cwTktPhone">Contact number</label>' +
+      '<input id="cwTktPhone" type="tel" autocomplete="tel" placeholder="+91 98765 43210">' +
+      '<button type="submit" class="primary">Raise ticket</button>' +
+      '<span class="cw-note" id="cwTktErr"></span>';
+    box.appendChild(form);
+    scrollDown();
+
+    var who = document.getElementById("cwTktName");
+    var num = document.getElementById("cwTktPhone");
+    who.value = name;
+    num.value = contact;
+    (name ? num : who).focus();
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var n = who.value.trim();
+      var c = num.value.trim();
+      // Same E.164 normalisation the callback form uses.
+      var dial = c.replace(/[^\d+]/g, "").replace(/(?!^)\+/g, "");
+      if (!n || !/^\+[1-9]\d{7,14}$/.test(dial)) {
+        document.getElementById("cwTktErr").textContent =
+          "Please give a name and a number including the country code.";
+        return;
+      }
+      form.remove();
+      submitTicket(box, article, n, dial);
+    });
+  }
+
+  function submitTicket(box, article, name, contact) {
+    var pending = note(box, "Raising that now\u2026");
 
     fetch("/api/ticket", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         issue: lastUserMessage(),
+        name: name,
+        contact: contact,
         article: article,
         transcript: history
       })
@@ -647,13 +705,14 @@
       .then(function (r) {
         if (r.ok) {
           pending.textContent = r.data.reference
-            ? "Ticket " + r.data.reference + " raised with " + r.data.team + " at priority " + r.data.priority + "."
+            ? "Ticket #" + r.data.reference + " raised with " + r.data.team
+              + " at priority " + r.data.priority + "."
             : "Ticket raised with " + r.data.team + " at priority " + r.data.priority + ".";
           return;
         }
         if (r.status === 503) {
           // Be straight about it rather than inventing a reference number.
-          pending.textContent = "I can't raise tickets from here just yet — that isn't connected.";
+          pending.textContent = "I can't raise tickets from here just yet \u2014 that isn't connected.";
           var retry = document.createElement("button");
           retry.type = "button";
           retry.className = "primary";

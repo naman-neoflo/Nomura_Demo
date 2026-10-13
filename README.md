@@ -14,7 +14,7 @@ A single-page IT service desk, styled to Nomura's visual identity. Two ways in:
 | `index.html` | The page and the chat widget. No build step. |
 | `api/chat.py` | Answers a question from the knowledge base. |
 | `api/callback.py` | Forwards callback requests to n8n. |
-| `api/ticket.py` | Raises a ticket, when a ticketing webhook is configured. |
+| `api/ticket.py` | Raises a Freshdesk ticket. |
 | `api/_search.py` | FAISS vector search fused with BM25. |
 | `kb/Nomura_IT_Knowledge_Base.pdf` | Source knowledge base. |
 | `kb/software_catalog.json` | Approved software list, from the voice agent prompt. |
@@ -128,9 +128,14 @@ route falls back to the article's steps rather than failing the chat.
 acknowledges and stops. Thumbs down — and any question the knowledge base cannot
 answer — offers the two escalation routes:
 
-- **Raise a ticket** → `POST /api/ticket`. Team and priority are inherited from
-  the knowledge base article's own escalation route (e.g. *Outlook Not Opening →
-  Messaging Team → P2*), defaulting to IT Service Desk / P3.
+- **Raise a ticket** → `POST /api/ticket`, which calls Freshdesk directly.
+  Team and priority are inherited from the knowledge base article's own
+  escalation route (e.g. *Outlook Not Opening → Messaging Team → P2*),
+  defaulting to IT Service Desk / P3. `P1/P2/P3` maps onto Freshdesk's
+  `4/3/2`, and the conversation goes into the ticket description.
+  Freshdesk needs a requester, which the chat never asked for, so the widget
+  reuses whatever is already typed into the callback form and asks inline for
+  anything missing.
 - **Request a callback** → closes the chat, preselects the matching reason in
   the form and focuses it.
 
@@ -148,7 +153,8 @@ All optional; see `.env.example`. Set them in the Vercel project for production.
 | `EMBEDDING_MODEL` | Defaults to `openai/text-embedding-3-small`. |
 | `BM25_FLOOR` / `VECTOR_FLOOR` | Defaults from `api/_search.py`. |
 | `WEBHOOK_URL` | Falls back to the n8n URL in `api/callback.py`. |
-| `TICKET_WEBHOOK_URL` | "Raise a ticket" reports that ticketing is not connected. It does not invent a reference number. |
+| `FRESHDESK_DOMAIN` / `FRESHDESK_API_KEY` | "Raise a ticket" reports that ticketing is not connected. It does not invent a reference number. |
+| `FRESHDESK_GROUP_ID` / `FRESHDESK_PRODUCT_ID` | Tickets are created unassigned and in the default product. |
 
 ## What the knowledge base covers
 

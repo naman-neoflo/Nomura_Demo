@@ -1,14 +1,16 @@
-"""Raises a support ticket from the chat widget.
+"""Raises a Freshdesk ticket from the chat widget.
 
-Routing (team and priority) comes from the knowledge base article the chat was
-looking at, so a ticket inherits the escalation the KB specifies.
+Calls the Freshdesk API directly -- no middleware. Routing comes from the
+knowledge base: each article names the team and priority to use when its steps
+do not resolve the issue, and that priority maps onto Freshdesk's scale.
 
-A ticket is only real if TICKET_WEBHOOK_URL points at something that records
-it. With no webhook configured this returns 503 rather than inventing a
-reference number, so the widget can offer the callback form instead of telling
-someone their ticket was filed when it was not.
+A ticket is only real if Freshdesk is configured. With the credentials unset
+this returns 503 rather than inventing a reference number, so the widget can
+offer the callback form instead of telling someone their ticket was filed when
+it was not.
 """
 
+import base64
 import json
 import os
 import sys
@@ -24,20 +26,73 @@ from http.server import BaseHTTPRequestHandler
 from _http import method_not_allowed, read_json, send_json
 from _net import post_json
 
-TICKET_WEBHOOK = os.environ.get("TICKET_WEBHOOK_URL")
+DOMAIN = os.environ.get("FRESHDESK_DOMAIN", "").strip().rstrip("/")
+API_KEY = os.environ.get("FRESHDESK_API_KEY", "").strip()
+GROUP_ID = os.environ.get("FRESHDESK_GROUP_ID", "").strip()
+PRODUCT_ID = os.environ.get("FRESHDESK_PRODUCT_ID", "").strip()
+
+# The knowledge base works in P1/P2/P3; Freshdesk uses 1 Low to 4 Urgent.
+PRIORITY = {"P1": 4, "P2": 3, "P3": 2}
+STATUS_OPEN = 2
+
 DEFAULT_ROUTE = {"team": "IT Service Desk", "priority": "P3"}
+
+
+def configured():
+    return bool(DOMAIN and API_KEY)
+
+
+def api_url():
+    host = DOMAIN if "." in DOMAIN else "%s.freshdesk.com" % DOMAIN
+    host = host.replace("https://", "").replace("http://", "")
+    return "https://%s/api/v2/tickets" % host
+
+
+def auth_header():
+    # Freshdesk takes the API key as the basic-auth username; the password is
+    # ignored, and "X" is what their own documentation uses.
+    token = base64.b64encode(("%s:X" % API_KEY).encode()).decode()
+    return "Basic " + token
+
+
+def describe(body, article, route):
+    """The ticket body. Everything the agent needs to pick it up cold."""
+    lines = [body["issue"], ""]
+    if article.get("title"):
+        lines.append("Knowledge base article used: %s" % article["title"])
+    lines.append("Suggested assignment: %s (%s)" % (route["team"], route["priority"]))
+    lines.append("Raised from: the IT Service Desk chat assistant")
+
+    transcript = body.get("transcript") or []
+    if transcript:
+        lines += ["", "Conversation:"]
+        for turn in transcript[-20:]:
+            who = "Employee" if turn.get("role") == "user" else "Assistant"
+            lines.append("%s: %s" % (who, str(turn.get("content") or "").strip()))
+
+    return "\n".join(lines)
 
 
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         body = read_json(self)
         issue = (body.get("issue") or "").strip()
+        name = (body.get("name") or "").strip()
+        contact = (body.get("contact") or "").strip()
         article = body.get("article") or {}
 
         if not issue:
             return send_json(self, 400, {"message": "A description of the issue is required"})
 
-        if not TICKET_WEBHOOK:
+        # Freshdesk needs a requester. A phone number is accepted in place of an
+        # email, but then the name is mandatory.
+        if not name or not contact:
+            return send_json(self, 400, {
+                "message": "A name and contact number are required to raise a ticket",
+                "needs": ["name", "contact"],
+            })
+
+        if not configured():
             return send_json(self, 503, {
                 "message": "Ticketing is not connected yet",
                 "configured": False,
@@ -49,39 +104,47 @@ class handler(BaseHTTPRequestHandler):
             "priority": escalation.get("priority") or DEFAULT_ROUTE["priority"],
         }
 
+        payload = {
+            "name": name,
+            "phone": contact,
+            "subject": "IT Service Desk: %s" % issue[:160],
+            "description": describe(body, article, route),
+            "status": STATUS_OPEN,
+            "priority": PRIORITY.get(route["priority"], 2),
+            "tags": ["it-service-desk", "chat-assistant", route["team"]],
+        }
+        if GROUP_ID.isdigit():
+            payload["group_id"] = int(GROUP_ID)
+        if PRODUCT_ID.isdigit():
+            payload["product_id"] = int(PRODUCT_ID)
+
         try:
-            status, raw = post_json(TICKET_WEBHOOK, {
-                "source": "it-service-desk-chat",
-                "name": body.get("name"),
-                "contact_number": body.get("contact"),
-                "issue": issue,
-                "kb_article": article.get("title"),
-                "kb_article_id": article.get("id"),
-                "assignment_group": route["team"],
-                "priority": route["priority"],
-                "transcript": (body.get("transcript") or [])[-20:],
-                "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            }, timeout=30)
+            status, raw = post_json(
+                api_url(), payload,
+                headers={"Authorization": auth_header()},
+                timeout=30,
+            )
         except Exception as exc:
-            print("Ticket webhook unreachable:", exc)
+            print("Freshdesk unreachable:", exc)
             return send_json(self, 502, {"message": "Could not reach the ticketing system"})
 
         if status >= 400:
-            print("Ticket webhook returned", status, raw[:300])
-            return send_json(self, 502, {"message": "The ticketing system rejected the request"})
+            # Freshdesk returns a useful errors array; log it, do not leak it.
+            print("Freshdesk returned", status, raw[:500])
+            return send_json(self, 502, {
+                "message": "The ticketing system rejected the request",
+            })
 
-        # Use the reference the ticketing system returns; never fabricate one.
         reference = None
         try:
-            data = json.loads(raw)
-            for field in ("reference", "ticket", "number", "id"):
-                if data.get(field):
-                    reference = data[field]
-                    break
+            reference = json.loads(raw).get("id")
         except (ValueError, AttributeError):
             pass
 
-        send_json(self, 200, {
+        print("Freshdesk ticket %s created for %s (%s, %s)"
+              % (reference, name, route["team"], route["priority"]))
+
+        return send_json(self, 200, {
             "configured": True,
             "reference": reference,
             "team": route["team"],
@@ -89,7 +152,13 @@ class handler(BaseHTTPRequestHandler):
         })
 
     def do_GET(self):
-        method_not_allowed(self)
+        """Health check: is Freshdesk wired up, and where would tickets land."""
+        send_json(self, 200, {
+            "configured": configured(),
+            "domain": api_url() if DOMAIN else None,
+            "group_id": GROUP_ID or None,
+            "product_id": PRODUCT_ID or None,
+        })
 
     def log_message(self, *args):
         pass
