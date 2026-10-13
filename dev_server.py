@@ -18,7 +18,10 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 API_DIR = os.path.join(ROOT, "api")
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
 
-sys.path.insert(0, API_DIR)
+# Deliberately NOT adding api/ to sys.path. Vercel loads each route with the
+# project root as the working directory, so a route that does not put its own
+# directory on the path fails there with ModuleNotFoundError. Loading them the
+# same way here means that failure shows up locally instead of in production.
 
 
 def load_routes():

@@ -11,7 +11,14 @@ someone their ticket was filed when it was not.
 
 import json
 import os
+import sys
 import time
+
+# Vercel loads this file as the route entrypoint with the project root as the
+# working directory, so the sibling modules in this folder are not importable
+# by default. Put this directory on the path before importing them.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from http.server import BaseHTTPRequestHandler
 
 from _http import method_not_allowed, read_json, send_json
