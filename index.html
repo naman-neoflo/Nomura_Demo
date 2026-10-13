@@ -770,8 +770,22 @@
   // Ask who we are talking to once, on their first real question. It makes the
   // conversation personal, and it means a ticket can be raised later without
   // stopping to ask for details a second time.
+  // Long enough to read as the assistant considering what was said, rather than
+  // a form firing the instant someone types.
+  var IDENTITY_PAUSE_MS = 3500;
+
   function askWhoTheyAre(question) {
     pendingQuestion = question;
+    setBusy(true);
+    var typing = showTyping();
+    setTimeout(function () {
+      typing.remove();
+      setBusy(false);
+      showIdentityForm();
+    }, IDENTITY_PAUSE_MS);
+  }
+
+  function showIdentityForm() {
     var el = addMessage("bot",
       "Happy to help with that. Before I dig in \u2014 who am I speaking with? "
       + "I'll take your work email too, so that if we can't sort it here I can "
