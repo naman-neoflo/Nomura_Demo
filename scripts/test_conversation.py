@@ -106,6 +106,16 @@ CASES = [
     ("can I speak to a person", LAPTOP, "handoff"),
     ("i want a callback", LAPTOP, "handoff"),
 
+    # a problem statement containing success-shaped words is still a problem.
+    # "Nothing is working on my laptop" was congratulating people on a fix.
+    ("Hi, my laptop has not been working since morning. The internet is not "
+     "working. Nothing is working on my laptop. I don't know why.", None, "answer"),
+    ("nothing is working on my laptop", None, "answer"),
+    ("the internet is not working", None, "answer"),
+    ("my laptop is working slowly", None, "answer"),
+    ("it's working now thanks", OUTLOOK, "resolved"),
+    ("it is working now", OUTLOOK, "resolved"),
+
     # still out of scope
     ("how do I book annual leave", None, "none"),
     ("what is the share price of nomura", None, "none"),

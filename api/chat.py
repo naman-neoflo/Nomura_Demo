@@ -80,16 +80,26 @@ FAILED_RE = re.compile(
     re.I,
 )
 
-# "that worked", "all sorted now", "it's fixed"
+# "that worked", "all sorted now", "it's fixed".
+#
+# The subject has to be an actual pronoun standing in for the problem. A bare
+# "is working" matched "Nothing is working on my laptop" and congratulated
+# someone on fixing a laptop that had never worked.
 RESOLVED_RE = re.compile(
     r"\b("
     r"(that|it|this)\s+(worked|works|fixed|did\s+it|helped)"
+    r"|(that|it|this)(\s+is|'?s)\s+(working|fixed|sorted)"
     r"|all\s+(good|sorted|fine)"
-    r"|(is|it'?s)\s+(working|fixed|sorted)"
     r"|sorted\s+now"
+    r"|(problem|issue)\s+(is\s+)?(gone|resolved|fixed|sorted)"
     r")\b",
     re.I,
 )
+
+# A negation anywhere near the claim means it is not resolved, whatever shape
+# the rest of the sentence takes.
+NEGATED_RE = re.compile(
+    r"\b(not|n'?t|never|nothing|none|no\s+longer|still)\b", re.I)
 
 
 def _words(message):
@@ -183,11 +193,21 @@ def keep_going_line(article):
 
 
 def read_outcome(message):
-    """Did they just tell us the steps worked, or that they didn't?"""
-    if RESOLVED_RE.search(message):
-        return "resolved"
+    """Did they just tell us the steps worked, or that they didn't?
+
+    Failure is checked first and negation vetoes a success: "it didn't work"
+    and "nothing is working" both contain words that read as success out of
+    context, and mistaking a broken laptop for a fixed one is the worse error.
+    """
     if FAILED_RE.search(message):
         return "failed"
+    hit = RESOLVED_RE.search(message)
+    if hit:
+        # Look at the clause the match sits in, not the whole message: "that
+        # worked, thanks" should survive a later sentence containing "not".
+        clause = re.split(r"[.!?;]", message[:hit.end()])[-1]
+        if not NEGATED_RE.search(clause):
+            return "resolved"
     return None
 
 
