@@ -291,7 +291,7 @@ no example countries: listing two read as a whitelist.
 
 - A successful callback submission **places a real phone call** to the number
   entered. Test with a number you control.
-- The sidebar content (service desk hours, callback time estimate) is
-  placeholder text — replace it before use.
+- The sidebar content (service desk hours, the under-5-minutes callback
+  estimate) is placeholder text — replace it before use.
 - Internal tool. It carries Nomura's branding without being an official Nomura
   property, so keep this repo and any deployment private.
