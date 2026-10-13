@@ -479,8 +479,10 @@
   var input = document.getElementById("cwInput");
   var sendBtn = document.getElementById("cwSend");
 
-  var history = [];      // [{role, content}] sent back for context
+  var history = [];       // [{role, content}] sent back for context
   var lastArticle = null; // knowledge base article behind the last answer
+  var profile = null;     // {name, email} - asked for once, reused everywhere
+  var pendingQuestion = null;
   var busy = false;
 
   // Map a knowledge base section onto the callback form's reason dropdown.
@@ -638,19 +640,18 @@
     return el;
   }
 
-  // Freshdesk needs a requester, and the chat never asked who it is talking to.
-  // Reuse whatever is already typed into the callback form, and ask inline for
-  // anything missing rather than bouncing them out of the conversation.
+  // By this point the chat has usually already taken a name and email. Fall back
+  // to the callback form, and only ask if we genuinely have nothing.
   function raiseTicket(box, article) {
+    if (profile && profile.email) {
+      submitTicket(box, article, profile);
+      return;
+    }
+
     var nameField = document.getElementById("name");
     var contactField = document.getElementById("contact");
     var name = nameField ? nameField.value.trim() : "";
     var contact = contactField ? contactField.value.trim() : "";
-
-    if (name && contact) {
-      submitTicket(box, article, name, contact);
-      return;
-    }
 
     var form = document.createElement("form");
     form.className = "cw-ticket-form";
@@ -658,36 +659,34 @@
       '<p>Who should the ticket be raised for?</p>' +
       '<label for="cwTktName">Name</label>' +
       '<input id="cwTktName" type="text" autocomplete="name" placeholder="Your full name">' +
-      '<label for="cwTktPhone">Contact number</label>' +
-      '<input id="cwTktPhone" type="tel" autocomplete="tel" placeholder="+91 98765 43210">' +
+      '<label for="cwTktEmail">Work email</label>' +
+      '<input id="cwTktEmail" type="email" autocomplete="email" placeholder="you@nomura.com">' +
       '<button type="submit" class="primary">Raise ticket</button>' +
       '<span class="cw-note" id="cwTktErr"></span>';
     box.appendChild(form);
     scrollDown();
 
     var who = document.getElementById("cwTktName");
-    var num = document.getElementById("cwTktPhone");
+    var mail = document.getElementById("cwTktEmail");
     who.value = name;
-    num.value = contact;
-    (name ? num : who).focus();
+    (name ? mail : who).focus();
 
     form.addEventListener("submit", function (e) {
       e.preventDefault();
       var n = who.value.trim();
-      var c = num.value.trim();
-      // Same E.164 normalisation the callback form uses.
-      var dial = c.replace(/[^\d+]/g, "").replace(/(?!^)\+/g, "");
-      if (!n || !/^\+[1-9]\d{7,14}$/.test(dial)) {
+      var m = mail.value.trim();
+      if (!n || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(m)) {
         document.getElementById("cwTktErr").textContent =
-          "Please give a name and a number including the country code.";
+          "Please give a name and a valid email address.";
         return;
       }
+      profile = { name: n, email: m, contact: contact };
       form.remove();
-      submitTicket(box, article, n, dial);
+      submitTicket(box, article, profile);
     });
   }
 
-  function submitTicket(box, article, name, contact) {
+  function submitTicket(box, article, who) {
     var pending = note(box, "Raising that now\u2026");
 
     fetch("/api/ticket", {
@@ -695,8 +694,7 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         issue: lastUserMessage(),
-        name: name,
-        contact: contact,
+        profile: who,
         article: article,
         transcript: history
       })
@@ -758,9 +756,58 @@
     input.disabled = state;
   }
 
+  // Ask who we are talking to once, on their first real question. It makes the
+  // conversation personal, and it means a ticket can be raised later without
+  // stopping to ask for details a second time.
+  function askWhoTheyAre(question) {
+    pendingQuestion = question;
+    var el = addMessage("bot",
+      "Happy to help with that. Before I dig in \u2014 who am I speaking with? "
+      + "I'll take your work email too, so that if we can't sort it here I can "
+      + "raise a ticket without asking twice.");
+
+    var form = document.createElement("form");
+    form.className = "cw-ticket-form";
+    form.innerHTML =
+      '<label for="cwWhoName">Name</label>' +
+      '<input id="cwWhoName" type="text" autocomplete="name" placeholder="Your full name">' +
+      '<label for="cwWhoEmail">Work email</label>' +
+      '<input id="cwWhoEmail" type="email" autocomplete="email" placeholder="you@nomura.com">' +
+      '<button type="submit" class="primary">Continue</button>' +
+      '<span class="cw-note" id="cwWhoErr"></span>';
+    el.appendChild(form);
+    scrollDown();
+    document.getElementById("cwWhoName").focus();
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var n = document.getElementById("cwWhoName").value.trim();
+      var m = document.getElementById("cwWhoEmail").value.trim();
+      if (!n || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(m)) {
+        document.getElementById("cwWhoErr").textContent =
+          "I need a name and a valid email address.";
+        return;
+      }
+      profile = { name: n, email: m };
+      form.remove();
+      var q = pendingQuestion;
+      pendingQuestion = null;
+      ask(q);
+    });
+  }
+
   function send(text) {
     addMessage("user", text);
     history.push({ role: "user", content: text });
+    // A greeting or a one-word reply does not warrant stopping to take details.
+    if (!profile && text.split(/\s+/).length >= 3) {
+      askWhoTheyAre(text);
+      return;
+    }
+    ask(text);
+  }
+
+  function ask(text) {
     setBusy(true);
     var typing = showTyping();
 
@@ -770,7 +817,8 @@
       body: JSON.stringify({
         message: text,
         history: history.slice(0, -1),
-        article: lastArticle
+        article: lastArticle,
+        profile: profile
       })
     })
       .then(function (res) {
@@ -807,9 +855,7 @@
     launcher.setAttribute("aria-expanded", "true");
     if (!log.childElementCount) {
       addMessage("bot",
-        "Hi, I'm the Nomura IT Assistant. Tell me what's going wrong — something "
-        + "like \"Outlook won't open\" or \"my VPN keeps dropping\" — and I'll talk "
-        + "you through it.");
+        "Hi, welcome to the Nomura IT Service Desk. How can I help?");
     }
     input.focus();
   }

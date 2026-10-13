@@ -77,19 +77,22 @@ class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         body = read_json(self)
         issue = (body.get("issue") or "").strip()
-        name = (body.get("name") or "").strip()
-        contact = (body.get("contact") or "").strip()
+        profile = body.get("profile") or {}
+        name = (body.get("name") or profile.get("name") or "").strip()
+        email = (body.get("email") or profile.get("email") or "").strip()
+        contact = (body.get("contact") or profile.get("contact") or "").strip()
         article = body.get("article") or {}
 
         if not issue:
             return send_json(self, 400, {"message": "A description of the issue is required"})
 
-        # Freshdesk needs a requester. A phone number is accepted in place of an
-        # email, but then the name is mandatory.
-        if not name or not contact:
+        # Freshdesk needs a requester. An email is the cleanest one -- it matches
+        # an existing contact instead of creating a duplicate. A phone number
+        # works too, but then the name becomes mandatory.
+        if not email and not (name and contact):
             return send_json(self, 400, {
-                "message": "A name and contact number are required to raise a ticket",
-                "needs": ["name", "contact"],
+                "message": "An email address is required to raise a ticket",
+                "needs": ["name", "email"],
             })
 
         if not configured():
@@ -105,14 +108,18 @@ class handler(BaseHTTPRequestHandler):
         }
 
         payload = {
-            "name": name,
-            "phone": contact,
             "subject": "IT Service Desk: %s" % issue[:160],
             "description": describe(body, article, route),
             "status": STATUS_OPEN,
             "priority": PRIORITY.get(route["priority"], 2),
             "tags": ["it-service-desk", "chat-assistant", route["team"]],
         }
+        if email:
+            payload["email"] = email
+        else:
+            payload["phone"] = contact
+        if name:
+            payload["name"] = name
         if GROUP_ID.isdigit():
             payload["group_id"] = int(GROUP_ID)
         if PRODUCT_ID.isdigit():
@@ -142,7 +149,7 @@ class handler(BaseHTTPRequestHandler):
             pass
 
         print("Freshdesk ticket %s created for %s (%s, %s)"
-              % (reference, name, route["team"], route["priority"]))
+              % (reference, email or name, route["team"], route["priority"]))
 
         return send_json(self, 200, {
             "configured": True,

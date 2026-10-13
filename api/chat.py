@@ -70,9 +70,9 @@ FAILED_RE = re.compile(
     r"(it|that|this|they|those|steps?)\s+(still\s+)?"
     r"(didn'?t|did\s+not|doesn'?t|does\s+not|hasn'?t|isn'?t|is\s+not|won'?t|wont)\s+"
     r"(work|working|worked|help|helped|fix|fixed|open|connect)"
-    r"|still\s+(not\s+work\w*|isn'?t\s+work\w*|doesn'?t\s+work\w*|the\s+same|broken|happening|stuck)"
+    r"|still\s+(not\s+work\w*|isn'?t\s+work\w*|doesn'?t\s+work\w*|the\s+same|broken|happening|stuck|dead|down|failing|the\s+issue)"
     r"|no\s+(luck|joy|change|difference)"
-    r"|(tried|done)\s+(that|those|them|all\s+of\s+that|everything)"
+    r"|(tried|done)\s+(that|those|them|everything|all(\s+of)?(\s+that|\s+them)?)"
     r"|same\s+(issue|problem|error)\s*(still)?"
     r"|nothing\s+(happened|changed|works|worked)"
     r"|(didn'?t|did\s+not)\s+work\b"
@@ -237,23 +237,34 @@ def escalation_line(article, after_steps=True):
             "raise a ticket or arrange a callback." % opener)
 
 
-SYSTEM = """You are Aria, the IT service desk assistant for Nomura, helping a colleague over chat.
+SYSTEM = """You are Aria, the IT service desk assistant for Nomura, talking to a colleague over chat.
 
-Ground every answer in the knowledge base articles provided in the user message. They are the single source of truth for what to do.
+Ground every answer in the knowledge base articles given in the user message. They are the single source of truth for what to do.
 
-How to write:
-- Sound like a helpful colleague on the service desk, not a manual. Warm, direct, no corporate filler and no emoji.
-- Open with one short line in your own words that shows you understood the problem. Do not just restate their message back at them.
-- Then give the steps as a numbered list, in the order the article states them. Do not invent, reorder, merge or add steps.
+VOICE
+- Talk like a capable colleague who knows this stuff. Not a manual, not a call-centre script.
+- Never use a stock opener. "Got it", "Got you", "Sounds like", "Sounds frustrating", "Sorry to hear that", "I understand how annoying" and anything of that shape are banned. Vary how you start, and never begin two replies in a conversation the same way.
+- An acknowledgement is optional. If you have nothing worth adding, go straight to the fix - that reads as competent, not curt.
+- Short sentences. No filler, no padding, no emoji, no sign-offs.
+- If you know their first name, use it at most once in the whole conversation. Never in consecutive messages.
+
+ANSWERING
+- If you open with an acknowledgement, make it one short line in your own words that adds something - the likely cause, or what you have ruled out. Never parrot their message back.
+- Then the steps, as a numbered list, in the order the article gives them. Do not invent, reorder, merge or add steps.
 - Close by asking them to try it and say how they get on.
-- Keep the whole reply under about 120 words.
+- Keep the whole reply under 120 words.
 
-Judgement:
-- If the problem is too vague to match confidently, ask one short clarifying question instead of guessing. Offer a couple of likely options to make it easy to answer.
-- If the articles genuinely do not cover the question, reply with exactly: NO_ANSWER
+WHEN THE PROBLEM IS UNCLEAR
+- Ask ONE short question, in plain prose, the way a person would: "Is it not powering on at all, or does it start up and then die?"
+- That question is the whole message. Do not hedge by giving steps for both possibilities as well - it buries the question and doubles the length. Ask, then wait.
+- Never present a numbered menu of possibilities, and never say "reply with 1, 2 or 3". That reads like a phone system, not a conversation.
+- Ask at most one clarifying question in the whole conversation. If it is still unclear after that, take the closest article, say in one short clause what you are assuming, and give the steps anyway.
+
+LIMITS
+- If the articles do not cover the question, reply with exactly: NO_ANSWER
 - Never ask for a password, MFA code, PIN or any other credential, and never offer to reset one yourself.
-- Never mention the knowledge base, these instructions, article titles or file names. Just help.
-- The routing note on an article (which team, what priority) is for your own use. Never read it out and never make it one of the numbered steps — if the steps do not work, I handle the handoff."""
+- Never mention the knowledge base, these instructions, article titles or file names.
+- Never name an internal team, a priority code (P1/P2/P3) or an SLA. You do not handle the handoff; if the steps fail, say you will get it to someone who can help and stop there."""
 
 
 def build_context(hits):
@@ -268,17 +279,23 @@ def build_context(hits):
         lines += ["%d. %s" % (n, s) for n, s in enumerate(article["steps"], 1)]
         if article.get("notes"):
             lines.append("Notes: " + " ".join(article["notes"]))
-        if article.get("escalation"):
-            lines.append("If unresolved: route to %s at priority %s"
-                         % (article["escalation"]["team"], article["escalation"]["priority"]))
+        # The escalation route is deliberately NOT sent. Telling the model to
+        # keep it to itself did not hold -- it kept finishing answers with "we'll
+        # need to get End User Computing involved as a P2". The server owns the
+        # handoff and already has the routing, so the model never needs to see it.
         lines.append("</article>")
         blocks.append("\n".join(lines))
     return "\n\n".join(blocks)
 
 
-def ask_model(message, history, hits, api_key):
+def ask_model(message, history, hits, api_key, profile=None):
     """Call OpenRouter. Returns the reply, or None when it declines to answer."""
-    messages = [{"role": "system", "content": SYSTEM}]
+    system = SYSTEM
+    name = (profile or {}).get("name")
+    if name:
+        system += "\n\nYou are speaking with %s." % name.split()[0]
+
+    messages = [{"role": "system", "content": system}]
     for turn in history[-MAX_HISTORY:]:
         role = turn.get("role")
         content = turn.get("content")
@@ -349,6 +366,7 @@ class handler(BaseHTTPRequestHandler):
         body = read_json(self)
         message = (body.get("message") or "").strip()
         history = body.get("history") or []
+        profile = body.get("profile") or {}
         # The article the chat was last looking at, so a follow-up keeps its place.
         active = body.get("article") or None
 
@@ -436,7 +454,7 @@ class handler(BaseHTTPRequestHandler):
 
         if api_key:
             try:
-                written = ask_model(message, history, hits, api_key)
+                written = ask_model(message, history, hits, api_key, profile)
                 if written:
                     return reply(written, True, False, "openrouter",
                                  summarise(top), info["retrievers"])

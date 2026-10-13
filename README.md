@@ -56,6 +56,7 @@ chat feel robotic, so the route reads the turn first:
 
 | Turn | Response |
 | --- | --- |
+| The first real question | Takes a name and work email once, inline. Everything after reuses it, including raising a ticket. |
 | A greeting ("Hi", "Hii", "Heyy") | A short hello. Elongated spellings are normalised, so "Hiii" is a greeting, not a failed search. |
 | A thank-you or "that worked" | A warm close, no escalation offered. |
 | "It didn't work" / "still not working" | Not a new question — it is the end of the steps already given. Escalates on the article in play, quoting the knowledge base's own routing. |
@@ -114,6 +115,12 @@ against "Reset your Nomura password".
 Re-run the script after changing the knowledge base or the embedding model; it
 reprints the separation so the floors can be re-centred.
 
+The prompt is deliberate about voice: no stock openers ("Got it", "Sounds
+like"), no numbered menus of options — a clarifying question is asked in prose
+and is the whole message — the first name is used at most once, and the
+internal routing is never sent to the model at all, because telling it to keep
+the routing to itself did not hold.
+
 **Answering** depends on `OPENROUTER_API_KEY`:
 
 | Key | Behaviour |
@@ -133,9 +140,8 @@ answer — offers the two escalation routes:
   escalation route (e.g. *Outlook Not Opening → Messaging Team → P2*),
   defaulting to IT Service Desk / P3. `P1/P2/P3` maps onto Freshdesk's
   `4/3/2`, and the conversation goes into the ticket description.
-  Freshdesk needs a requester, which the chat never asked for, so the widget
-  reuses whatever is already typed into the callback form and asks inline for
-  anything missing.
+  The requester is the email taken at the start of the chat, which matches an
+  existing Freshdesk contact instead of creating a duplicate.
 - **Request a callback** → closes the chat, preselects the matching reason in
   the form and focuses it.
 
