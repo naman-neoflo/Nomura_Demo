@@ -179,11 +179,27 @@
   }
   .cw-head h2 { margin: 0; font-size: 14px; font-weight: 700; }
   .cw-head p { margin: 1px 0 0; font-size: 11.5px; opacity: .85; }
+  .cw-head-actions { display: flex; align-items: center; gap: 2px; flex: none; }
   .cw-close {
     background: none; border: none; color: #fff; cursor: pointer;
-    padding: 4px; line-height: 0; border-radius: 0;
+    padding: 5px; line-height: 0; border-radius: 0;
   }
   .cw-close:hover { opacity: .75; background: none; }
+
+  /* Expanded: anchored to the same corner, just bigger. Growing from the
+     corner keeps the launcher's position meaningful and avoids the jump a
+     centred modal would cause. */
+  .cw-panel.expanded {
+    width: 920px;
+    height: calc(100vh - 48px);
+  }
+  .cw-panel.expanded .cw-log { padding: 24px 28px; }
+  .cw-panel.expanded .cw-msg { max-width: 68%; }
+  .cw-panel.expanded .cw-bubble { font-size: 13.5px; }
+  .cw-panel.expanded .cw-form { padding: 14px 16px; }
+  @media (prefers-reduced-motion: no-preference) {
+    .cw-panel { transition: width .18s ease, height .18s ease; }
+  }
 
   .cw-log { flex: 1 1 auto; overflow-y: auto; padding: 16px; background: #f7f7f7; }
   .cw-msg { margin-bottom: 14px; max-width: 86%; }
@@ -228,7 +244,8 @@
 
   .cw-note { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
 
-  .cw-ticket-form { margin-top: 12px; }
+  /* Capped so the fields stay a sensible size when the panel is expanded. */
+  .cw-ticket-form { margin-top: 12px; max-width: 340px; }
   .cw-ticket-form p { margin: 0 0 10px; font-size: 12.5px; font-weight: 700; color: #333; }
   .cw-ticket-form label { font-size: 12px; margin-bottom: 4px; }
   .cw-ticket-form input { height: 36px; font-size: 13px; margin-bottom: 10px; }
@@ -253,7 +270,10 @@
   }
 
   @media (max-width: 480px) {
-    .cw-panel { right: 8px; left: 8px; bottom: 8px; width: auto; height: calc(100vh - 16px); }
+    .cw-panel, .cw-panel.expanded {
+      right: 8px; left: 8px; bottom: 8px; width: auto; height: calc(100vh - 16px);
+    }
+    #cwExpand { display: none; }
     .cw-launcher { right: 16px; bottom: 16px; }
   }
 
@@ -372,11 +392,20 @@
       <h2>IT Assistant</h2>
       <p>Answers from the Nomura IT knowledge base</p>
     </div>
-    <button class="cw-close" id="cwClose" aria-label="Close chat">
+    <div class="cw-head-actions">
+      <button class="cw-close" id="cwExpand" aria-label="Expand chat" aria-pressed="false" title="Expand">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" id="cwExpandIcon">
+          <path d="M9.5 2.5h4v4M13.5 2.5l-5 5M6.5 13.5h-4v-4M2.5 13.5l5-5"
+                fill="none" stroke="currentColor" stroke-width="1.6"
+                stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <button class="cw-close" id="cwClose" aria-label="Close chat">
       <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
         <path d="M3.5 3.5l9 9m0-9l-9 9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
       </svg>
-    </button>
+      </button>
+    </div>
   </header>
 
   <div class="cw-log" id="cwLog" role="log" aria-live="polite"></div>
@@ -851,6 +880,9 @@
 
   function openPanel() {
     panel.hidden = false;
+    try {
+      if (localStorage.getItem("cwExpanded") === "1") setExpanded(true);
+    } catch (e) { /* storage can throw in private mode; the default size is fine */ }
     launcher.hidden = true;
     launcher.setAttribute("aria-expanded", "true");
     if (!log.childElementCount) {
@@ -865,6 +897,30 @@
     launcher.hidden = false;
     launcher.setAttribute("aria-expanded", "false");
   }
+
+  var expandBtn = document.getElementById("cwExpand");
+  var expandIcon = document.getElementById("cwExpandIcon");
+
+  // Arrows pointing out = will expand. Arrows pointing in = will shrink back.
+  var ICON_EXPAND = '<path d="M9.5 2.5h4v4M13.5 2.5l-5 5M6.5 13.5h-4v-4M2.5 13.5l5-5" '
+    + 'fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>';
+  var ICON_SHRINK = '<path d="M13 3l-4.5 4.5M8.5 3.5v4h4M3 13l4.5-4.5M7.5 12.5v-4h-4" '
+    + 'fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>';
+
+  function setExpanded(on) {
+    panel.classList.toggle("expanded", on);
+    expandBtn.setAttribute("aria-pressed", on ? "true" : "false");
+    expandBtn.setAttribute("aria-label", on ? "Shrink chat" : "Expand chat");
+    expandBtn.title = on ? "Shrink" : "Expand";
+    expandIcon.innerHTML = on ? ICON_SHRINK : ICON_EXPAND;
+    try { localStorage.setItem("cwExpanded", on ? "1" : "0"); } catch (e) { /* private mode */ }
+    scrollDown();
+  }
+
+  expandBtn.addEventListener("click", function () {
+    setExpanded(!panel.classList.contains("expanded"));
+    input.focus();
+  });
 
   launcher.addEventListener("click", openPanel);
   closeBtn.addEventListener("click", closePanel);
