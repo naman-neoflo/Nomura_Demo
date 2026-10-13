@@ -121,23 +121,50 @@ def read_outcome(message):
     return None
 
 
-def escalation_line(article):
-    """What to say once the steps have been tried and the issue is still there.
+# A clarifying question is often formatted as a numbered list too, so the
+# numbering alone does not tell steps and options apart.
+CHOICE_RE = re.compile(
+    r"\b(which (one|of these|of the)|reply with|closest|let me know which"
+    r"|is it closer to|matches what you see|pick the)\b", re.I)
+
+
+def gave_steps(history):
+    """Did the last thing we said actually give them something to try?
+
+    "That usually does it" only makes sense if we handed over steps. After a
+    clarifying question it is presumptuous.
+    """
+    for turn in reversed(history or []):
+        if turn.get("role") != "assistant":
+            continue
+        text = str(turn.get("content") or "")
+        if CHOICE_RE.search(text):
+            return False
+        return bool(re.search(r"^\s*1[.)]\s", text, re.M))
+    return False
+
+
+def escalation_line(article, after_steps=True):
+    """What to say once the issue is still there and the chat cannot fix it.
 
     The knowledge base names the team and priority for exactly this case, so the
     handoff quotes its routing instead of apologising generically.
     """
     route = (article or {}).get("escalation") or {}
     team, priority = route.get("team"), route.get("priority")
+
+    opener = ("Sorry \u2014 that usually does it." if after_steps
+              else "Sorry you're still stuck.")
+
     if team and priority:
         # "the Messaging Team" reads right; "the Identity and Access Management"
         # does not. Only the named groups take an article.
         named = team.endswith("Team") or team.endswith("Desk")
-        return ("Sorry — that usually does it. Since it hasn't, this needs %s%s "
-                "to take a proper look. I can raise a %s ticket for you, or arrange "
-                "a callback." % ("the " if named else "", team, priority))
-    return ("Sorry that didn't sort it. Let me get this to someone who can dig into "
-            "it properly — I can raise a ticket or arrange a callback.")
+        return ("%s This needs %s%s to take a proper look. I can raise a %s ticket "
+                "for you, or arrange a callback."
+                % (opener, "the " if named else "", team, priority))
+    return ("%s Let me get this to someone who can dig into it properly \u2014 I can "
+            "raise a ticket or arrange a callback." % opener)
 
 
 SYSTEM = """You are Aria, the IT service desk assistant for Nomura, helping a colleague over chat.
@@ -280,7 +307,7 @@ class handler(BaseHTTPRequestHandler):
         # already gave. Escalate on the article in play rather than re-running
         # retrieval on three words and reporting that nothing matched.
         if outcome == "failed" and active:
-            return reply(escalation_line(active), True, True, "followup", active)
+            return reply(escalation_line(active, gave_steps(history)), True, True, "followup", active)
 
         hits, info = search(message)
 
@@ -293,7 +320,7 @@ class handler(BaseHTTPRequestHandler):
 
         if not info["confident"] or not hits:
             if outcome == "failed":
-                return reply(escalation_line(active), True, True, "followup", active)
+                return reply(escalation_line(active, gave_steps(history)), True, True, "followup", active)
             return reply(NO_ANSWER, False, True, "none", None, info["retrievers"])
 
         top = hits[0]["article"]
