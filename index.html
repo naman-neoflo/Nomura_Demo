@@ -63,8 +63,6 @@
     padding-left: 14px; border-left: 1px solid rgba(255,255,255,.45);
   }
 
-
-
   /* ---------- page title ---------- */
   .page-head { padding: 30px 0 22px; }
   .page-head h1 {
@@ -74,17 +72,6 @@
   }
   .page-head p { margin: 14px 0 0; max-width: 62ch; color: #444; }
 
-  /* ---------- notice strip (Fraud Alert pattern) ---------- */
-  .notice {
-    display: flex; align-items: center; gap: 16px;
-    background: var(--card); border: 1px solid var(--line-soft);
-    padding: 14px 18px; margin-bottom: 22px;
-  }
-  .notice .mark {
-    flex: none; width: 22px; height: 22px; display: grid; place-items: center;
-  }
-  .notice strong { color: var(--red-text); font-size: 15px; }
-  .notice span { color: #444; font-size: 13px; }
 
   /* ---------- layout ---------- */
   .cols { display: grid; grid-template-columns: 1fr 300px; gap: 22px; align-items: start; padding-bottom: 46px; }
@@ -178,7 +165,6 @@
     padding: 13px 16px; background: var(--red); color: #fff; flex: none;
   }
   .cw-head h2 { margin: 0; font-size: 14px; font-weight: 700; }
-  .cw-head p { margin: 1px 0 0; font-size: 11.5px; opacity: .85; }
   .cw-head-actions { display: flex; align-items: center; gap: 2px; flex: none; }
   .cw-close {
     background: none; border: none; color: #fff; cursor: pointer;
@@ -282,10 +268,7 @@
     .brand { flex-direction: column; align-items: flex-start; gap: 4px; }
     .brand .unit { padding-left: 0; border-left: none; }
     .masthead .chevrons { width: 150px; }
-    .notice { align-items: flex-start; flex-wrap: wrap; gap: 10px 12px; }
-    .notice strong { flex: 1 1 auto; }
-    .notice span { flex: 1 0 100%; }
-  }
+        }
 </style>
 </head>
 <body>
@@ -309,13 +292,7 @@
        will call you back on the number you provide.</p>
   </div>
 
-  <div class="notice">
-    <span class="mark" aria-hidden="true">
-      <svg width="20" height="18" viewBox="0 0 20 18"><path d="M10 1.5 19 16.5H1z" fill="none" stroke="#333" stroke-width="1.6" stroke-linejoin="round"/><path d="M10 7v4.2" stroke="#333" stroke-width="1.6" stroke-linecap="round"/><circle cx="10" cy="13.6" r="1" fill="#333"/></svg>
-    </span>
-    <strong>Security reminder:</strong>
-    <span>The service desk will never ask you for your password, MFA code or PIN during a callback.</span>
-  </div>
+
 
   <div class="cols">
     <section class="panel">
@@ -326,7 +303,7 @@
         <form id="callbackForm" novalidate>
           <div class="field">
             <label for="name">Name <span class="req">*</span></label>
-            <input id="name" name="name" type="text" required autocomplete="name" placeholder="e.g. Naman Sharma">
+            <input id="name" name="name" type="text" required autocomplete="name" placeholder="e.g. James Carter">
           </div>
 
           <div class="field">
@@ -386,10 +363,7 @@
 
 <section class="cw-panel" id="cwPanel" hidden aria-label="IT Assistant chat">
   <header class="cw-head">
-    <div>
-      <h2>IT Assistant</h2>
-      <p>Answers from the Nomura IT knowledge base</p>
-    </div>
+    <h2>IT Assistant</h2>
     <div class="cw-head-actions">
       <button class="cw-close" id="cwExpand" aria-label="Expand chat" aria-pressed="false" title="Expand">
         <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" id="cwExpandIcon">
