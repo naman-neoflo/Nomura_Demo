@@ -38,7 +38,11 @@
     -webkit-font-smoothing: antialiased;
   }
   .wrap { max-width: 1000px; margin: 0 auto; padding: 0 20px; }
-  main { flex: 1 0 auto; }   /* takes up the slack so the footer sits at the bottom */
+  /* Takes up the slack so the footer sits at the bottom. width:100% is not
+     redundant: main is also .wrap, and a flex item with auto cross-axis
+     margins does not stretch, so margin:0 auto collapsed it to fit-content
+     and squashed the two columns. max-width still caps it. */
+  main { flex: 1 0 auto; width: 100%; }
   footer { flex: none; }
 
   /* ---------- header ---------- */
