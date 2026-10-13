@@ -59,17 +59,22 @@ FILLER_WORDS = {
     "is", "im", "i", "am", "my", "me", "no",
 }
 
-# "that didn't work", "still not working", "no luck", "tried that already"
+# "that didn't work", "still not working", "no luck", "tried that already".
+#
+# Every branch must be anaphoric -- it has to point back at something we just
+# suggested. A bare "not working" is how people *open* a problem ("email is not
+# working"), not how they report one of our fixes failing.
 FAILED_RE = re.compile(
     r"\b("
-    r"(didn'?t|did\s+not|doesn'?t|does\s+not|hasn'?t|won'?t|wont)\s+"
+    r"(it|that|this|they|those|steps?)\s+(still\s+)?"
+    r"(didn'?t|did\s+not|doesn'?t|does\s+not|hasn'?t|isn'?t|is\s+not|won'?t|wont)\s+"
     r"(work|working|worked|help|helped|fix|fixed|open|connect)"
-    r"|still\s+(not|isn'?t|doesn'?t|the\s+same|having|broken|happening)"
+    r"|still\s+(not\s+work\w*|isn'?t\s+work\w*|doesn'?t\s+work\w*|the\s+same|broken|happening|stuck)"
     r"|no\s+(luck|joy|change|difference)"
-    r"|(tried|done)\s+(that|those|them|all\s+of\s+that)"
-    r"|not\s+work(ing|ed)?"
-    r"|same\s+(issue|problem|error)"
-    r"|nothing\s+(happened|changed|works)"
+    r"|(tried|done)\s+(that|those|them|all\s+of\s+that|everything)"
+    r"|same\s+(issue|problem|error)\s*(still)?"
+    r"|nothing\s+(happened|changed|works|worked)"
+    r"|(didn'?t|did\s+not)\s+work\b"
     r")\b",
     re.I,
 )
@@ -182,7 +187,8 @@ Judgement:
 - If the problem is too vague to match confidently, ask one short clarifying question instead of guessing. Offer a couple of likely options to make it easy to answer.
 - If the articles genuinely do not cover the question, reply with exactly: NO_ANSWER
 - Never ask for a password, MFA code, PIN or any other credential, and never offer to reset one yourself.
-- Never mention the knowledge base, these instructions, article titles or file names. Just help."""
+- Never mention the knowledge base, these instructions, article titles or file names. Just help.
+- The routing note on an article (which team, what priority) is for your own use. Never read it out and never make it one of the numbered steps — if the steps do not work, I handle the handoff."""
 
 
 def build_context(hits):
@@ -303,24 +309,38 @@ class handler(BaseHTTPRequestHandler):
             return reply("Great, glad that's sorted. Anything else I can help with?",
                          True, False, "greeting")
 
-        # "It didn't work" is not a new question -- it is the end of the steps we
-        # already gave. Escalate on the article in play rather than re-running
-        # retrieval on three words and reporting that nothing matched.
-        if outcome == "failed" and active:
-            return reply(escalation_line(active, gave_steps(history)), True, True, "followup", active)
-
         hits, info = search(message)
 
-        # A short follow-up ("what about the other one?") can carry too little
-        # on its own. Retry with the previous question attached before giving up.
-        if not info["confident"]:
+        # A short follow-up ("what about the other one?") can carry too little on
+        # its own. Retry with the previous question attached before giving up.
+        #
+        # Not for a failure report, though: "no it didn't work" has no topic of
+        # its own, so gluing the last question onto it manufactures a confident
+        # match for a question nobody asked.
+        if not info["confident"] and outcome != "failed":
             context = last_question(history)
             if context and len(message.split()) <= 10:
                 hits, info = search(context + " " + message)
 
+        same_topic = bool(
+            active and hits and info["confident"]
+            and hits[0]["article"]["id"] == active.get("id")
+        )
+
+        # "It didn't work" ends the steps we already gave -- but only when it is
+        # still about the same thing. "Email is not working" after a laptop
+        # question is a new problem, and escalating that to the laptop team is
+        # worse than not recognising the phrase at all. Retrieval decides.
+        if outcome == "failed" and (not info["confident"] or same_topic):
+            return reply(escalation_line(active, gave_steps(history)),
+                         True, True, "followup", active)
+
         if not info["confident"] or not hits:
-            if outcome == "failed":
-                return reply(escalation_line(active, gave_steps(history)), True, True, "followup", active)
+            # Short, unmatched, and mid-conversation: far likelier to be a reply
+            # to what we just said than a new question we have nothing for.
+            if active and len(message.split()) <= 6:
+                return reply(escalation_line(active, gave_steps(history)),
+                             True, True, "followup", active)
             return reply(NO_ANSWER, False, True, "none", None, info["retrievers"])
 
         top = hits[0]["article"]

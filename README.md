@@ -59,9 +59,17 @@ chat feel robotic, so the route reads the turn first:
 | Anything else | Retrieval. |
 
 A turn only counts as small talk when every word in it is a pleasantry, so
-"hi my outlook won't open" still goes through retrieval. A short follow-up that
-retrieves nothing on its own is retried with the previous question attached
-before the chat gives up.
+"hi my outlook won't open" still goes through retrieval.
+
+**Retrieval decides whether a turn is a follow-up or a new topic**, not the
+wording alone. "Email is not working" reads like a failure report, but it is
+someone opening a new problem — escalating it to whichever team owned the
+previous question would be worse than not recognising the phrase at all. So a
+failure report only escalates when retrieval finds nothing for it, or finds the
+article already in play. Otherwise it is answered as the new question it is.
+For the same reason, the context retry below never applies to a failure report:
+it has no topic of its own, and attaching the previous question to it
+manufactures a confident match for something nobody asked.
 
 The widget sends the active article with each message, which is what lets a
 three-word "no it didn't work" know which steps it refers to.
