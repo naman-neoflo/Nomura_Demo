@@ -12,26 +12,32 @@ A single-page IT service desk, styled to Nomura's visual identity. Two ways in:
 | Path | Purpose |
 | --- | --- |
 | `index.html` | The page and the chat widget. No build step. |
-| `api/callback.js` | Forwards callback requests to n8n. |
-| `api/chat.js` | Answers a question from the knowledge base. |
-| `api/ticket.js` | Raises a ticket, when a ticketing webhook is configured. |
-| `api/_retrieval.js` | BM25 search over the knowledge base. |
-| `api/_kb-data.js` | Generated. The knowledge base as an ES module. |
+| `api/chat.py` | Answers a question from the knowledge base. |
+| `api/callback.py` | Forwards callback requests to n8n. |
+| `api/ticket.py` | Raises a ticket, when a ticketing webhook is configured. |
+| `api/_search.py` | FAISS vector search fused with BM25. |
 | `kb/Nomura_IT_Knowledge_Base.pdf` | Source knowledge base. |
-| `kb/kb.json` | Generated. The parsed articles, for reading. |
-| `scripts/build_kb.py` | Parses the PDF into the two generated files. |
-| `scripts/test_retrieval.mjs` | Retrieval accuracy check. |
-| `dev-server.mjs` | Local server. Mounts the same handlers Vercel runs. |
+| `kb/kb.json` | Generated. The parsed articles. |
+| `kb/kb.faiss` | Generated. The vector index. Not in the repo until built. |
+| `kb/kb_index.json` | Generated. Row order and the embedding model used. |
+| `scripts/build_kb.py` | Parses the PDF into `kb/kb.json`. |
+| `scripts/build_index.py` | Embeds the articles and builds the FAISS index. |
+| `scripts/test_retrieval.py` | Retrieval accuracy check and floor calibration. |
+| `dev_server.py` | Local server. Mounts the same handlers Vercel runs. |
+
+Everything server-side is Python, because FAISS is a Python library and the
+chat route has to run it.
 
 ## Running locally
 
 ```bash
-npm install
-node dev-server.mjs        # http://localhost:8000
+pip3 install -r requirements.txt
+python3 dev_server.py        # http://localhost:8000
 ```
 
-`dev-server.mjs` serves the page and mounts every `api/*.js` module at
-`/api/<name>`, so the routes behave locally exactly as they do deployed.
+`dev_server.py` serves the page and mounts every `api/<name>.py` module at
+`/api/<name>`, so the routes behave locally exactly as they do deployed. It
+prints on startup whether the FAISS index and the OpenRouter key are present.
 
 Submissions go to the API route, which forwards to n8n **server-side**. This
 matters: the browser cannot call the n8n webhook directly, because its preflight
@@ -42,9 +48,21 @@ blocked before it is sent and surfaces only as "Failed to fetch".
 
 Ask it an IT question and it answers from the knowledge base.
 
-**Retrieval** is BM25 over the 28 parsed articles, with the title and section
-weighted above the body, plus a synonym table for the words people actually use
-("wifi", "mfa", "pw"). Measured by `npm test`:
+**Retrieval** runs two retrievers and fuses them with reciprocal rank fusion:
+
+- **FAISS** over OpenRouter embeddings. `scripts/build_index.py` embeds each
+  article once into a flat inner-product index; queries are embedded with the
+  same model and searched against it. Vectors are L2-normalised, so inner
+  product is cosine similarity. `IndexFlatIP` is exhaustive and exact — at 28
+  articles there is nothing to approximate, and an exact index has no recall
+  loss to tune.
+- **BM25**, lexical. Needs no key and no index, so the chat works before the
+  index is built, and it catches exact tokens embeddings blur together — "P1",
+  "spooler", "ipconfig".
+
+They keep separate confidence floors, because their scores are on unrelated
+scales; either retriever being sure is enough to answer. Measured by
+`python3 scripts/test_retrieval.py`, BM25 alone:
 
 ```
 top-1 (used when no LLM key is set): 23/24
@@ -52,20 +70,19 @@ top-3 (what the model receives):     24/24
 out-of-scope correctly declined:     3/3
 ```
 
-**This is lexical search, not a vector database.** Embeddings would need an API
-key the project does not have yet, and at 28 short articles with distinctive
-terms ("Outlook", "spooler", "VPN") lexical matching is accurate with no cold
-start. `retrieve()` in `api/_retrieval.js` is the seam — swapping in embeddings
-and a vector store means changing that one file.
+Re-run that script once the index exists — it prints the cosine separation
+between in-scope and out-of-scope questions, which is what `VECTOR_FLOOR` in
+`api/_search.py` should be set from. The committed value is a provisional
+guess until it has been measured.
 
-**Answering** depends on `ANTHROPIC_API_KEY`:
+**Answering** depends on `OPENROUTER_API_KEY`:
 
 | Key | Behaviour |
 | --- | --- |
-| Set | Claude (`claude-opus-5-5`) writes the answer, grounded in the retrieved articles only. Instructed to reply `NO_ANSWER` rather than improvise. |
+| Set | The model (default `anthropic/claude-opus-5.5` via OpenRouter) writes the answer, grounded in the retrieved articles only. Instructed to reply `NO_ANSWER` rather than improvise. |
 | Not set | The matching article's steps are returned verbatim. |
 
-Both paths answer only from the knowledge base. If the Claude call fails the
+Both paths answer only from the knowledge base. If the model call fails the
 route falls back to the article's steps rather than failing the chat.
 
 **Feedback.** Every assistant message carries thumbs up / thumbs down. Thumbs up
@@ -87,20 +104,29 @@ All optional; see `.env.example`. Set them in the Vercel project for production.
 
 | Variable | Effect when unset |
 | --- | --- |
-| `ANTHROPIC_API_KEY` | Knowledge base steps are returned verbatim instead of a written answer. |
-| `ANTHROPIC_MODEL` | Defaults to `claude-opus-5-5`. |
-| `WEBHOOK_URL` | Falls back to the n8n URL in `api/callback.js`. |
+| `OPENROUTER_API_KEY` | No vector search and no written answers — BM25 retrieval, knowledge base steps returned verbatim. |
+| `OPENROUTER_MODEL` | Defaults to `anthropic/claude-opus-5.5`. |
+| `EMBEDDING_MODEL` | Defaults to `openai/text-embedding-3-small`. |
+| `BM25_FLOOR` / `VECTOR_FLOOR` | Defaults from `api/_search.py`. |
+| `WEBHOOK_URL` | Falls back to the n8n URL in `api/callback.py`. |
 | `TICKET_WEBHOOK_URL` | "Raise a ticket" reports that ticketing is not connected. It does not invent a reference number. |
 
-## Rebuilding the knowledge base
+## Rebuilding the knowledge base and index
 
 ```bash
-pip3 install pdfplumber
-npm run build:kb      # kb/*.pdf -> api/_kb-data.js + kb/kb.json
-npm test              # re-check retrieval accuracy
+pip3 install -r requirements.txt pdfplumber
+
+python3 scripts/build_kb.py                 # kb/*.pdf -> kb/kb.json
+export OPENROUTER_API_KEY=sk-or-...
+python3 scripts/build_index.py              # kb/kb.json -> kb/kb.faiss
+python3 scripts/test_retrieval.py           # check accuracy, calibrate floors
 ```
 
-The parser reads the PDF's arrow glyph, which extracts as the characters `fi`.
+**Commit `kb/kb.faiss` and `kb/kb_index.json`.** They are build artefacts, but
+Vercel has no key at build time, so the deployed function reads them from the
+repo. They are small — 28 vectors is about 170 KB at 1536 dimensions.
+
+The PDF parser reads the arrow glyph, which extracts as the characters `fi`.
 Only a standalone `fi` is an arrow — replacing every occurrence corrupts
 `Office` into `Of→ce` and silently drops whole articles.
 
@@ -110,8 +136,10 @@ Deploy the repo root. No build command, no framework preset.
 
 - The page must be `index.html` — Vercel serves that at `/`, and a repo with
   only `callback.html` returns `404 NOT_FOUND` on the root URL.
-- The `api/*.js` routes answer the page's POSTs. Files prefixed with `_` are
-  modules, not routes.
+- Each `api/*.py` file becomes a Python function at `/api/<name>`. Files
+  prefixed with `_` are modules, not routes.
+- `requirements.txt` pins faiss-cpu and numpy. Python functions have a 500 MB
+  uncompressed bundle limit; this bundle is around 100 MB.
 
 ## n8n configuration
 

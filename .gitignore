@@ -6,3 +6,6 @@ __pycache__/
 *.pyc
 .DS_Store
 *.log
+
+# Build artefacts that DO belong in the repo (Vercel has no key at build time):
+#   kb/kb.faiss, kb/kb_index.json
