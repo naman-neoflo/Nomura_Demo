@@ -146,6 +146,110 @@
   footer .wrap { padding-top: 20px; padding-bottom: 22px; }
   footer .legal { color: #8f8f8f; margin: 0; }
 
+
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+
+  /* ---------- chat widget ---------- */
+  .cw-launcher {
+    position: fixed; right: 24px; bottom: 24px; z-index: 60;
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 13px 20px; border: none; border-radius: 0;
+    background: var(--red); color: #fff; font: inherit; font-size: 14px; font-weight: 700;
+    cursor: pointer; box-shadow: 0 2px 10px rgba(0,0,0,.25);
+  }
+  .cw-launcher:hover { background: var(--red-dark); }
+  .cw-launcher[hidden] { display: none; }
+
+  .cw-panel {
+    position: fixed; right: 24px; bottom: 24px; z-index: 61;
+    width: 380px; max-width: calc(100vw - 32px);
+    height: 580px; max-height: calc(100vh - 48px);
+    display: flex; flex-direction: column;
+    background: var(--card); border: 1px solid var(--line);
+    box-shadow: 0 6px 28px rgba(0,0,0,.28);
+  }
+  .cw-panel[hidden] { display: none; }
+
+  .cw-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 13px 16px; background: var(--red); color: #fff; flex: none;
+  }
+  .cw-head h2 { margin: 0; font-size: 14px; font-weight: 700; }
+  .cw-head p { margin: 1px 0 0; font-size: 11.5px; opacity: .85; }
+  .cw-close {
+    background: none; border: none; color: #fff; cursor: pointer;
+    padding: 4px; line-height: 0; border-radius: 0;
+  }
+  .cw-close:hover { opacity: .75; background: none; }
+
+  .cw-log { flex: 1 1 auto; overflow-y: auto; padding: 16px; background: #f7f7f7; }
+  .cw-msg { margin-bottom: 14px; max-width: 86%; }
+  .cw-msg.user { margin-left: auto; }
+  .cw-bubble {
+    padding: 10px 13px; font-size: 13px; line-height: 1.55;
+    background: #fff; border: 1px solid var(--line-soft); color: var(--ink);
+    white-space: normal; overflow-wrap: anywhere;
+  }
+  .cw-msg.user .cw-bubble { background: var(--red); border-color: var(--red); color: #fff; }
+  .cw-bubble ol { margin: 8px 0 0; padding-left: 20px; }
+  .cw-bubble li { margin-bottom: 5px; }
+  .cw-bubble strong { font-weight: 700; }
+  .cw-bubble p { margin: 0 0 8px; }
+  .cw-bubble p:last-child { margin-bottom: 0; }
+
+  .cw-feedback { display: flex; align-items: center; gap: 4px; margin-top: 6px; }
+  .cw-feedback button {
+    background: none; border: 1px solid transparent; padding: 4px 5px;
+    cursor: pointer; line-height: 0; border-radius: 0; color: #8a8a8a;
+  }
+  .cw-feedback button:hover:not(:disabled) { background: #ececec; color: #333; }
+  .cw-feedback button[aria-pressed="true"] { color: var(--red); border-color: var(--line); background: #fff; }
+  .cw-feedback button:disabled { cursor: default; opacity: .5; }
+  .cw-feedback .cw-thanks { font-size: 11.5px; color: var(--muted); margin-left: 4px; }
+
+  .cw-actions {
+    margin-top: 10px; padding: 12px 13px;
+    background: #fff; border: 1px solid var(--line-soft); border-left: 3px solid var(--red);
+  }
+  .cw-actions p { margin: 0 0 10px; font-size: 12.5px; color: #444; }
+  .cw-actions .row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .cw-actions button {
+    padding: 8px 13px; font: inherit; font-size: 12.5px; font-weight: 700;
+    border: 1px solid var(--red); background: #fff; color: var(--red);
+    cursor: pointer; border-radius: 0;
+  }
+  .cw-actions button:hover:not(:disabled) { background: var(--red); color: #fff; }
+  .cw-actions button.primary { background: var(--red); color: #fff; }
+  .cw-actions button.primary:hover:not(:disabled) { background: var(--red-dark); }
+  .cw-actions button:disabled { opacity: .55; cursor: not-allowed; }
+
+  .cw-note { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
+
+  .cw-typing { display: inline-flex; gap: 4px; padding: 3px 0; }
+  .cw-typing i {
+    width: 6px; height: 6px; background: #b0b0b0; border-radius: 50%;
+    animation: cw-blink 1.2s infinite ease-in-out;
+  }
+  .cw-typing i:nth-child(2) { animation-delay: .18s; }
+  .cw-typing i:nth-child(3) { animation-delay: .36s; }
+  @keyframes cw-blink { 0%, 60%, 100% { opacity: .25; } 30% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .cw-typing i { animation: none; opacity: .6; } }
+
+  .cw-form { flex: none; display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--line-soft); background: #fff; }
+  .cw-form input { flex: 1 1 auto; height: 40px; margin: 0; }
+  .cw-form button {
+    flex: none; padding: 0 16px; height: 40px; font-size: 13px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+
+  @media (max-width: 480px) {
+    .cw-panel { right: 8px; left: 8px; bottom: 8px; width: auto; height: calc(100vh - 16px); }
+    .cw-launcher { right: 16px; bottom: 16px; }
+  }
+
   @media (max-width: 820px) {
     .cols { grid-template-columns: 1fr; }
     .brand { flex-direction: column; align-items: flex-start; gap: 4px; }
@@ -248,6 +352,35 @@
   </div>
 </footer>
 
+<button class="cw-launcher" id="cwLauncher" aria-expanded="false" aria-controls="cwPanel">
+  <svg width="17" height="17" viewBox="0 0 18 18" aria-hidden="true">
+    <path d="M2 3.2h14v9.2H6.6L2.8 15.2V12.4H2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+  </svg>
+  Ask IT Assistant
+</button>
+
+<section class="cw-panel" id="cwPanel" hidden aria-label="IT Assistant chat">
+  <header class="cw-head">
+    <div>
+      <h2>IT Assistant</h2>
+      <p>Answers from the Nomura IT knowledge base</p>
+    </div>
+    <button class="cw-close" id="cwClose" aria-label="Close chat">
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+        <path d="M3.5 3.5l9 9m0-9l-9 9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+      </svg>
+    </button>
+  </header>
+
+  <div class="cw-log" id="cwLog" role="log" aria-live="polite"></div>
+
+  <form class="cw-form" id="cwForm">
+    <label for="cwInput" class="sr-only">Describe your IT issue</label>
+    <input id="cwInput" type="text" autocomplete="off" placeholder="Describe your IT issue…">
+    <button type="submit" id="cwSend">Send</button>
+  </form>
+</section>
+
 <script>
 (function () {
   // Served by server.py? Post to the local proxy, which forwards to n8n
@@ -320,6 +453,321 @@
       .finally(function () {
         setBtn("Request Callback", false);
       });
+  });
+})();
+</script>
+<script>
+// IT Assistant chat widget.
+//
+// Answers come from /api/chat, which is grounded in the knowledge base. Every
+// assistant message can be rated; a thumbs down, or an answer the knowledge
+// base could not provide, offers the two escalation routes - raise a ticket,
+// or request a callback from a live agent.
+(function () {
+  var launcher = document.getElementById("cwLauncher");
+  var panel = document.getElementById("cwPanel");
+  var closeBtn = document.getElementById("cwClose");
+  var log = document.getElementById("cwLog");
+  var form = document.getElementById("cwForm");
+  var input = document.getElementById("cwInput");
+  var sendBtn = document.getElementById("cwSend");
+
+  var history = [];      // [{role, content}] sent back for context
+  var lastArticle = null; // knowledge base article behind the last answer
+  var busy = false;
+
+  // Map a knowledge base section onto the callback form's reason dropdown.
+  var REASON_BY_SECTION = {
+    "VPN": "VPN Not Connecting",
+    "Access & Permissions": "Account Unlock",
+    "Email & Outlook": "General IT Query",
+    "Microsoft Teams": "General IT Query",
+    "Internet & Network": "General IT Query",
+    "Laptop & Hardware": "General IT Query",
+    "Printers": "General IT Query"
+  };
+
+  function escapeHtml(text) {
+    return String(text).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  // Renders the small subset of formatting the API produces: **bold**,
+  // numbered steps, and blank-line paragraphs. Everything is escaped first.
+  function render(text) {
+    var blocks = escapeHtml(text).split(/\n{2,}/);
+    return blocks.map(function (block) {
+      var lines = block.split("\n").filter(function (l) { return l.trim(); });
+      var numbered = lines.length > 1 && lines.every(function (l) { return /^\s*\d+\.\s/.test(l); });
+      var html;
+      if (numbered) {
+        html = "<ol>" + lines.map(function (l) {
+          return "<li>" + l.replace(/^\s*\d+\.\s*/, "") + "</li>";
+        }).join("") + "</ol>";
+      } else {
+        html = "<p>" + lines.join("<br>") + "</p>";
+      }
+      return html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    }).join("");
+  }
+
+  function scrollDown() { log.scrollTop = log.scrollHeight; }
+
+  function addMessage(role, text) {
+    var wrap = document.createElement("div");
+    wrap.className = "cw-msg " + role;
+    var bubble = document.createElement("div");
+    bubble.className = "cw-bubble";
+    bubble.innerHTML = render(text);
+    wrap.appendChild(bubble);
+    log.appendChild(wrap);
+    scrollDown();
+    return wrap;
+  }
+
+  function showTyping() {
+    var wrap = document.createElement("div");
+    wrap.className = "cw-msg bot";
+    wrap.innerHTML = '<div class="cw-bubble"><span class="cw-typing"><i></i><i></i><i></i></span></div>';
+    log.appendChild(wrap);
+    scrollDown();
+    return wrap;
+  }
+
+  var ICON_UP = '<svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 14V6.8l3-5.3c.9 0 1.6.8 1.6 1.7V6h3.1c.8 0 1.4.8 1.2 1.6l-1.1 5A1.5 1.5 0 0 1 11.8 14zM5.5 6.8H3.2c-.7 0-1.2.5-1.2 1.2v4.8c0 .7.5 1.2 1.2 1.2h2.3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>';
+  var ICON_DOWN = '<svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 2v7.2l-3 5.3c-.9 0-1.6-.8-1.6-1.7V10H2.8c-.8 0-1.4-.8-1.2-1.6l1.1-5A1.5 1.5 0 0 1 4.2 2zM10.5 9.2h2.3c.7 0 1.2-.5 1.2-1.2V3.2c0-.7-.5-1.2-1.2-1.2h-2.3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>';
+
+  function addFeedback(messageEl, article) {
+    var row = document.createElement("div");
+    row.className = "cw-feedback";
+
+    var up = document.createElement("button");
+    up.type = "button";
+    up.innerHTML = ICON_UP;
+    up.setAttribute("aria-label", "This answer helped");
+    up.setAttribute("aria-pressed", "false");
+
+    var down = document.createElement("button");
+    down.type = "button";
+    down.innerHTML = ICON_DOWN;
+    down.setAttribute("aria-label", "This answer did not help");
+    down.setAttribute("aria-pressed", "false");
+
+    function settle(chosen, note) {
+      chosen.setAttribute("aria-pressed", "true");
+      up.disabled = true;
+      down.disabled = true;
+      var span = document.createElement("span");
+      span.className = "cw-thanks";
+      span.textContent = note;
+      row.appendChild(span);
+    }
+
+    up.addEventListener("click", function () {
+      settle(up, "Thanks for the feedback.");
+    });
+
+    down.addEventListener("click", function () {
+      settle(down, "Sorry that didn't help.");
+      offerEscalation(
+        "Let's get this to someone who can look at it properly.",
+        article
+      );
+    });
+
+    row.appendChild(up);
+    row.appendChild(down);
+    messageEl.appendChild(row);
+    scrollDown();
+  }
+
+  // The two ways out of the chat: a ticket, or a callback from a live agent.
+  function offerEscalation(prompt, article) {
+    var box = document.createElement("div");
+    box.className = "cw-actions";
+
+    var p = document.createElement("p");
+    p.textContent = prompt;
+    box.appendChild(p);
+
+    var row = document.createElement("div");
+    row.className = "row";
+
+    var ticketBtn = document.createElement("button");
+    ticketBtn.type = "button";
+    ticketBtn.className = "primary";
+    ticketBtn.textContent = "Raise a ticket";
+
+    var agentBtn = document.createElement("button");
+    agentBtn.type = "button";
+    agentBtn.textContent = "Request a callback";
+
+    row.appendChild(ticketBtn);
+    row.appendChild(agentBtn);
+    box.appendChild(row);
+    log.appendChild(box);
+    scrollDown();
+
+    ticketBtn.addEventListener("click", function () {
+      ticketBtn.disabled = true;
+      agentBtn.disabled = true;
+      raiseTicket(box, article);
+    });
+
+    agentBtn.addEventListener("click", function () {
+      ticketBtn.disabled = true;
+      agentBtn.disabled = true;
+      handOffToCallback(article);
+    });
+  }
+
+  function note(box, text) {
+    var el = document.createElement("p");
+    el.className = "cw-note";
+    el.textContent = text;
+    box.appendChild(el);
+    scrollDown();
+    return el;
+  }
+
+  function raiseTicket(box, article) {
+    var pending = note(box, "Raising a ticket…");
+
+    fetch("/api/ticket", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        issue: lastUserMessage(),
+        article: article,
+        transcript: history
+      })
+    })
+      .then(function (res) { return res.json().then(function (d) { return { ok: res.ok, status: res.status, data: d }; }); })
+      .then(function (r) {
+        if (r.ok) {
+          pending.textContent = r.data.reference
+            ? "Ticket " + r.data.reference + " raised with " + r.data.team + " at priority " + r.data.priority + "."
+            : "Ticket raised with " + r.data.team + " at priority " + r.data.priority + ".";
+          return;
+        }
+        if (r.status === 503) {
+          // Be straight about it rather than inventing a reference number.
+          pending.textContent = "Ticketing isn't connected yet, so I can't raise one from here.";
+          var retry = document.createElement("button");
+          retry.type = "button";
+          retry.className = "primary";
+          retry.style.marginTop = "10px";
+          retry.textContent = "Request a callback instead";
+          retry.addEventListener("click", function () { handOffToCallback(article); });
+          box.appendChild(retry);
+          scrollDown();
+          return;
+        }
+        pending.textContent = r.data.message || "Could not raise the ticket.";
+      })
+      .catch(function () {
+        pending.textContent = "Could not reach the ticketing system.";
+      });
+  }
+
+  function handOffToCallback(article) {
+    var reason = (article && REASON_BY_SECTION[article.section]) || "General IT Query";
+    var select = document.getElementById("reason");
+    if (select) {
+      var match = Array.prototype.some.call(select.options, function (o) { return o.value === reason; });
+      if (match) select.value = reason;
+    }
+    closePanel();
+    var nameField = document.getElementById("name");
+    if (nameField) {
+      nameField.scrollIntoView({ behavior: "smooth", block: "center" });
+      setTimeout(function () { nameField.focus(); }, 400);
+    }
+  }
+
+  function lastUserMessage() {
+    for (var i = history.length - 1; i >= 0; i--) {
+      if (history[i].role === "user") return history[i].content;
+    }
+    return "IT issue raised from chat";
+  }
+
+  function setBusy(state) {
+    busy = state;
+    sendBtn.disabled = state;
+    input.disabled = state;
+  }
+
+  function send(text) {
+    addMessage("user", text);
+    history.push({ role: "user", content: text });
+    setBusy(true);
+    var typing = showTyping();
+
+    fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: text, history: history.slice(0, -1) })
+    })
+      .then(function (res) {
+        if (!res.ok) throw new Error("status " + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        typing.remove();
+        var el = addMessage("bot", data.reply);
+        history.push({ role: "assistant", content: data.reply });
+        lastArticle = data.article || null;
+
+        addFeedback(el, data.article);
+        if (data.escalate) {
+          offerEscalation("How would you like to take this forward?", data.article);
+        }
+      })
+      .catch(function () {
+        typing.remove();
+        var el = addMessage("bot", "Sorry, I couldn't reach the assistant just now. Please try again.");
+        offerEscalation("You can still get help another way.", lastArticle);
+      })
+      .finally(function () {
+        setBusy(false);
+        input.focus();
+      });
+  }
+
+  function openPanel() {
+    panel.hidden = false;
+    launcher.hidden = true;
+    launcher.setAttribute("aria-expanded", "true");
+    if (!log.childElementCount) {
+      addMessage("bot",
+        "Hello, I'm the Nomura IT Assistant. Describe your issue — for example "
+        + "\"Outlook won't open\" or \"my VPN keeps dropping\" — and I'll walk you "
+        + "through the fix.");
+    }
+    input.focus();
+  }
+
+  function closePanel() {
+    panel.hidden = true;
+    launcher.hidden = false;
+    launcher.setAttribute("aria-expanded", "false");
+  }
+
+  launcher.addEventListener("click", openPanel);
+  closeBtn.addEventListener("click", closePanel);
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && !panel.hidden) closePanel();
+  });
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var text = input.value.trim();
+    if (!text || busy) return;
+    input.value = "";
+    send(text);
   });
 })();
 </script>

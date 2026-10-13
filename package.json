@@ -1,0 +1,15 @@
+{
+  "name": "nomura-it-service-desk",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "IT service desk callback form and knowledge base chatbot",
+  "scripts": {
+    "test": "node scripts/test_retrieval.mjs",
+    "build:kb": "python3 scripts/build_kb.py",
+    "dev": "python3 server.py"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.133.0"
+  }
+}
