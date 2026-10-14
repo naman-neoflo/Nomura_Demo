@@ -122,6 +122,12 @@ CASES = [
     ("that's not working", OUTLOOK, "followup"),
     ("i have tried everything but it's not working", OUTLOOK, "followup"),
 
+    # more ways of saying the steps have been worked through. "I did all four
+    # steps in order" was being answered as a brand new question.
+    ("i have gone through all the steps", OUTLOOK, "followup"),
+    ("yes I did all of them in order", OUTLOOK, "followup"),
+    ("i did the steps already", OUTLOOK, "followup"),
+
     # still out of scope
     ("how do I book annual leave", None, "none"),
     ("what is the share price of nomura", None, "none"),

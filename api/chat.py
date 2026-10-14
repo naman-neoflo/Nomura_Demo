@@ -80,7 +80,9 @@ FAILED_RE = re.compile(
     r"(work|working|worked|help|helped|fix|fixed|open|connect)"
     r"|still\s+(not\s+work\w*|isn'?t\s+work\w*|doesn'?t\s+work\w*|the\s+same|broken|happening|stuck|dead|down|failing|the\s+issue)"
     r"|no\s+(luck|joy|change|difference)"
-    r"|(tried|done)\s+(that|those|them|everything|all(\s+of)?(\s+that|\s+them)?)"
+    r"|(tried|did|done|completed|gone\s+through|been\s+through)\s+"
+    r"(all\s+)?(of\s+)?(the\s+|those\s+|these\s+|them\s+)?"
+    r"(that|those|them|everything|steps?|all)"
     r"|same\s+(issue|problem|error)\s*(still)?"
     r"|nothing\s+(happened|changed|works|worked)"
     r"|(didn'?t|did\s+not)\s+work\b"
@@ -238,7 +240,7 @@ def gave_steps(history):
         text = str(turn.get("content") or "")
         if CHOICE_RE.search(text):
             return False
-        return bool(re.search(r"^\s*1[.)]\s", text, re.M))
+        return has_numbered_steps(text)
     return False
 
 
@@ -547,6 +549,41 @@ def ask_model(message, history, hits, api_key, profile=None):
     return None if (not text or "NO_ANSWER" in text) else text
 
 
+# "I'll get this to someone who can help further." When the model says that,
+# the buttons have to appear -- otherwise it has promised a handoff that never
+# arrives, which is worse than not offering one.
+HANDOFF_PROMISE_RE = re.compile(
+    r"("
+    r"(get|pass|hand|take|send|refer|escalate)\s+(this|it|you)?\s*"
+    r"(on\s+|over\s+|up\s+|through\s+)?(to|in\s+front\s+of)\s+"
+    r"(someone|a\s+specialist|a\s+colleague|the\s+team)"
+    r"|someone\s+who\s+can\s+(help|look|take\s+a\s+look)"
+    r"|get\s+(someone|a\s+specialist)\s+to\s+(look|help)"
+    r"|needs?\s+(a\s+)?(specialist|human|person|engineer)"
+    r"|escalat(e|ing|ed)\s+(this|it)"
+    r")",
+    re.I,
+)
+
+
+def has_numbered_steps(text):
+    return bool(re.search(r"^\s*1[.)]\s", text or "", re.M))
+
+
+def promises_handoff(text):
+    """Is the reply actually handing the problem on, right now?
+
+    Not if it is still giving steps. "Try those and tell me what happens; if
+    it's still not charging I'll get it to someone" is an offer about the
+    future, and showing the ticket buttons under it pushes someone to escalate
+    before they have tried anything.
+    """
+    text = text or ""
+    if has_numbered_steps(text):
+        return False
+    return bool(HANDOFF_PROMISE_RE.search(text))
+
+
 def summarise(article):
     if not article:
         return None
@@ -663,9 +700,16 @@ class handler(BaseHTTPRequestHandler):
             if context and len(message.split()) <= 10:
                 hits, info = search(context + " " + message)
 
+        # The same thread, not a topic switch, when the best hit is the article
+        # already in play or a neighbour of it. "I did all four steps and it
+        # still isn't syncing" retrieves a different Outlook article than the
+        # one we were on, which is continuation, not a new question. A laptop
+        # thread landing on an email article still counts as a switch.
         same_topic = bool(
             active and hits and info["confident"]
-            and hits[0]["article"]["id"] == active.get("id")
+            and (hits[0]["article"]["id"] == active.get("id")
+                 or (active.get("section")
+                     and hits[0]["article"].get("section") == active.get("section")))
         )
 
         # "It didn't work" ends the steps we already gave -- but only when it is
@@ -724,8 +768,12 @@ class handler(BaseHTTPRequestHandler):
             try:
                 written = ask_model(message, history, same_area(hits), api_key, profile)
                 if written:
-                    return reply(written, True, False, "openrouter",
-                                 summarise(top), info["retrievers"])
+                    # Take the model at its word: if it has said it will hand
+                    # this on, show the options that actually do so.
+                    handing_on = promises_handoff(written)
+                    route_on = most_severe(tried + [summarise(top)]) if handing_on else summarise(top)
+                    return reply(written, True, handing_on, "openrouter",
+                                 route_on, info["retrievers"])
                 if declines == 0:
                     return reply(probe_reply(message, history, api_key),
                                  False, False, "probe", None, info["retrievers"])
